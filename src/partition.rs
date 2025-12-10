@@ -4,16 +4,18 @@ use std::collections::HashMap;
 use std::hash::Hash;
 
 /// Tracks vertex-based partion assignment output from a graph partioner
-struct PartitionState<T> {
+pub struct PartitionState<T> {
     assignments: HashMap<T, usize>,
     partition_sizes: Vec<usize>,
+    max_partition_size: usize,
 }
 
 impl<T> PartitionState<T> {
-    pub fn new(num_partitions: usize) -> Self {
+    pub fn new(num_partitions: usize, max_partition_size: usize) -> Self {
         Self {
             assignments: HashMap::new(),
             partition_sizes: vec![0; num_partitions],
+            max_partition_size,
         }
     }
 
@@ -34,6 +36,43 @@ impl<T> PartitionState<T> {
             .unwrap()
             .0
     }
+
+    pub fn has_room_in_partition_of(&self, v: T) -> bool
+    where
+        T: Eq + Hash,
+    {
+        matches!(self.assignments.get(&v), Some(&partition) if self.partition_sizes[partition] < self.max_partition_size)
+    }
+}
+
+pub trait BalanceScorer<T> {
+    fn compute(&self, state: &PartitionState<T>, partition: usize) -> f64;
+}
+
+pub struct CuttanaBalanceScorer {
+    num_partitions: usize,
+    gamma: f64,
+    vertex_count: usize,
+    edge_count: usize,
+}
+
+impl CuttanaBalanceScorer {
+    pub fn new(num_partitions: usize, gamma: f64, vertex_count: usize, edge_count: usize) -> Self {
+        Self {
+            num_partitions,
+            gamma,
+            vertex_count,
+            edge_count,
+        }
+    }
+}
+
+impl<T> BalanceScorer<T> for CuttanaBalanceScorer {
+    fn compute(&self, state: &PartitionState<T>, partition: usize) -> f64 {
+        let alpha = (self.num_partitions as f64).powf(self.gamma - 1.0) * (self.edge_count as f64)
+            / (self.vertex_count as f64).powf(self.gamma);
+        alpha * self.gamma * (state.partition_sizes[partition] as f64).powf(self.gamma - 1.0)
+    }
 }
 
 pub fn cuttana_partition<T>(
@@ -47,11 +86,12 @@ where
     T: Eq + Hash + Clone + Default,
 {
     let mut buffer = BufferManager::<T>::new(max_buffer_size);
-    let mut state = PartitionState::<T>::new(num_partitions);
+    let mut state = PartitionState::<T>::new(num_partitions, max_partition_size);
+    let balance_scorer = CuttanaBalanceScorer::new(num_partitions, 1.5f64, 100, 100);
 
     while let Some((v, nbrs)) = stream.next_vertex() {
         if nbrs.len() >= degree_max {
-            partition_vertex(v, &nbrs, &mut state, &mut buffer, max_partition_size);
+            partition_vertex(v, &nbrs, &mut state, &mut buffer, &balance_scorer);
         } else {
             buffer.insert(v, &nbrs);
         }
@@ -59,35 +99,23 @@ where
         if buffer.is_at_capacity()
             && let Some((v, nbrs)) = buffer.evict()
         {
-            partition_vertex(v, &nbrs, &mut state, &mut buffer, max_partition_size);
+            partition_vertex(v, &nbrs, &mut state, &mut buffer, &balance_scorer);
         }
     }
 
     while let Some((v, nbrs)) = buffer.evict() {
-        partition_vertex(v, &nbrs, &mut state, &mut buffer, max_partition_size);
+        partition_vertex(v, &nbrs, &mut state, &mut buffer, &balance_scorer);
     }
 
     state.assignments
 }
 
-fn compute_balance_score<T>(state: &mut PartitionState<T>, partition: usize) -> f64 {
-    // TODO: Make this generic
-    const NUM_PARTITIONS: usize = 16;
-    const GAMMA: f64 = 1.5;
-    const VERTEX_COUNT: u32 = 100;
-    const EDGE_COUNT: u32 = 100;
-
-    let alpha: f64 = (NUM_PARTITIONS as f64).powf(GAMMA - 1f64) * (EDGE_COUNT as f64)
-        / (VERTEX_COUNT as f64).powf(GAMMA);
-    alpha * GAMMA * (state.partition_sizes[partition] as f64).powf(GAMMA - 1f64)
-}
-
-fn partition_vertex<T>(
+fn partition_vertex<T, B: BalanceScorer<T>>(
     v: T,
     nbrs: &Vec<T>,
     state: &mut PartitionState<T>,
     buffer: &mut BufferManager<T>,
-    max_partition_size: usize,
+    balance_scorer: &B,
 ) where
     T: Eq + Hash + Clone + Default,
 {
@@ -106,21 +134,19 @@ fn partition_vertex<T>(
 
     let mut nbrs_per_partition = vec![0; state.partition_sizes.len()];
     for nbr in nbrs {
-        if let Some(&partition) = state.assignments.get(nbr)
-            && state.partition_sizes[partition] < max_partition_size
-        {
+        if state.has_room_in_partition_of(nbr.clone()) {
+            let partition = state.assignments[nbr];
             nbrs_per_partition[partition] += 1;
             let score =
-                nbrs_per_partition[partition] as f64 - compute_balance_score(state, partition);
+                nbrs_per_partition[partition] as f64 - balance_scorer.compute(state, partition);
             update_best_partition_candidate(partition, score);
         }
     }
 
     let partition = state.smallest_partition();
-    update_best_partition_candidate(partition, -compute_balance_score(state, partition));
+    update_best_partition_candidate(partition, -balance_scorer.compute(state, partition));
 
     state.assign(v, best_partition);
-
     for nbr in nbrs {
         buffer.update_score(nbr.clone());
     }
