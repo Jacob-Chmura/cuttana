@@ -5,13 +5,19 @@ use std::collections::HashMap;
 use std::hash::Hash;
 
 /// Tracks vertex-based partion assignment output from a graph partioner
-#[derive(Default)]
-pub struct PartitionState<T> {
+struct PartitionState<T> {
     assignments: HashMap<T, usize>,
     partition_sizes: Vec<usize>,
 }
 
 impl<T> PartitionState<T> {
+    pub fn new(num_partitions: usize) -> Self {
+        Self {
+            assignments: HashMap::new(),
+            partition_sizes: vec![0, num_partitions],
+        }
+    }
+
     /// Normalized number of edges whose endpoints are in different partions
     pub fn edge_cut_cost(&self) -> f64 {
         unimplemented!();
@@ -20,6 +26,99 @@ impl<T> PartitionState<T> {
     /// Normalized cost of cross-partion neighbors over the entire graph
     pub fn communication_volume_cost(&self) -> f64 {
         unimplemented!();
+    }
+
+    pub fn assign(&mut self, v: T, partition: usize)
+    where
+        T: Eq + Hash,
+    {
+        self.assignments.insert(v, partition);
+        self.partition_sizes[partition] += 1;
+    }
+}
+
+/// Manages buffered vertices which are not ready to partition
+struct BufferManager<T>
+where
+    T: Eq + Clone + Hash,
+{
+    heap: BinaryHeap<BufferEntry<T>>,
+    map: HashMap<T, BufferEntry<T>>,
+    capacity: usize,
+}
+
+impl<T> BufferManager<T>
+where
+    T: Eq + Clone + Hash,
+{
+    pub fn new(capacity: usize) -> Self {
+        Self {
+            heap: BinaryHeap::new(),
+            map: HashMap::new(),
+            capacity,
+        }
+    }
+
+    pub fn insert(&mut self, v: T, nbrs: &Vec<T>) {
+        let entry = BufferEntry {
+            score: compute_buffer_score(v.clone(), &nbrs),
+            vertex: v.clone(),
+            nbrs: nbrs.clone(),
+        };
+        self.heap.push(entry.clone());
+        self.map.insert(v, entry);
+    }
+
+    pub fn is_at_capacity(&self) -> bool {
+        self.heap.len() >= self.capacity
+    }
+
+    pub fn evict(&mut self) -> Option<(T, Vec<T>)> {
+        if let Some(entry) = self.heap.pop() {
+            self.map.remove(&entry.vertex);
+            return Some((entry.vertex, entry.nbrs));
+        }
+        None
+    }
+
+    pub fn update_score(&mut self, v: T) {
+        if let Some(mut entry) = self.map.remove(&v) {
+            entry.score += 2f64 / entry.nbrs.len() as f64;
+            self.heap.push(entry.clone()); // TODO: old one must be removed
+            self.map.insert(v.clone(), entry);
+        }
+    }
+}
+
+#[derive(Clone, PartialEq)]
+struct BufferEntry<T>
+where
+    T: Eq + Hash + Clone,
+{
+    score: f64,
+    vertex: T,
+    nbrs: Vec<T>,
+}
+
+impl<T> Eq for BufferEntry<T> where T: Eq + Hash + Clone {}
+
+impl<T> Ord for BufferEntry<T>
+where
+    T: Eq + Hash + Clone,
+{
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.score
+            .partial_cmp(&other.score)
+            .unwrap_or(Ordering::Equal)
+    }
+}
+
+impl<T> PartialOrd for BufferEntry<T>
+where
+    T: Eq + Hash + Clone,
+{
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
     }
 }
 
@@ -61,38 +160,6 @@ impl<T: Copy> Iterator for AdjacencyList<T> {
     }
 }
 
-#[derive(Clone, PartialEq)]
-struct BufferEntry<T>
-where
-    T: Eq + Hash + Clone,
-{
-    score: f64,
-    vertex: T,
-    nbrs: Vec<T>,
-}
-
-impl<T> Eq for BufferEntry<T> where T: Eq + Hash + Clone {}
-
-impl<T> Ord for BufferEntry<T>
-where
-    T: Eq + Hash + Clone,
-{
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.score
-            .partial_cmp(&other.score)
-            .unwrap_or(Ordering::Equal)
-    }
-}
-
-impl<T> PartialOrd for BufferEntry<T>
-where
-    T: Eq + Hash + Clone,
-{
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
 pub fn cuttana_partition<T>(
     mut stream: impl VertexStream<VertexID = T>,
     num_partitions: usize,
@@ -103,11 +170,8 @@ pub fn cuttana_partition<T>(
 where
     T: Eq + Hash + Clone + Default,
 {
-    let mut buffer_heap = BinaryHeap::<BufferEntry<T>>::new();
-    let mut buffer_map = HashMap::<T, BufferEntry<T>>::new();
-
-    let mut state = PartitionState::<T>::default();
-    state.partition_sizes = vec![0, num_partitions];
+    let mut buffer = BufferManager::<T>::new(max_buffer_size);
+    let mut state = PartitionState::<T>::new(num_partitions);
 
     while let Some((v, nbrs)) = stream.next_vertex() {
         if nbrs.len() >= degree_max {
@@ -115,60 +179,35 @@ where
                 v.clone(),
                 &nbrs,
                 &mut state,
-                &mut buffer_heap,
-                &mut buffer_map,
+                &mut buffer,
                 max_partition_size,
             );
         } else {
-            let entry = BufferEntry {
-                score: compute_buffer_score(v.clone(), &nbrs),
-                vertex: v.clone(),
-                nbrs: nbrs.clone(),
-            };
-            buffer_heap.push(entry.clone());
-            buffer_map.insert(v, entry);
+            buffer.insert(v, &nbrs);
         }
 
-        if buffer_heap.len() > max_buffer_size
-            && let Some(entry) = buffer_heap.pop()
+        if buffer.is_at_capacity()
+            && let Some((v, nbrs)) = buffer.evict()
         {
-            buffer_map.remove(&entry.vertex);
-            partition_vertex(
-                entry.vertex,
-                &entry.nbrs,
-                &mut state,
-                &mut buffer_heap,
-                &mut buffer_map,
-                max_partition_size,
-            );
+            partition_vertex(v, &nbrs, &mut state, &mut buffer, max_partition_size);
         }
     }
 
-    while !buffer_heap.is_empty() {
-        let entry = buffer_heap.pop().unwrap();
-        buffer_map.remove(&entry.vertex);
-
-        partition_vertex(
-            entry.vertex,
-            &entry.nbrs,
-            &mut state,
-            &mut buffer_heap,
-            &mut buffer_map,
-            max_partition_size,
-        );
+    while let Some((v, nbrs)) = buffer.evict() {
+        partition_vertex(v, &nbrs, &mut state, &mut buffer, max_partition_size);
     }
 
     state
 }
 
 fn compute_buffer_score<T>(v: T, nbrs: &Vec<T>) -> f64 {
-    // 2 * cnt_ajd_partitioned / nbrs.len() + nbr.len() / buffer_deg_threshold
+    // TODO: custimze this: 2 * cnt_ajd_partitioned / nbrs.len() + nbr.len() / buffer_deg_threshold
     0.0
 }
 
 fn compute_balance_score(partition: usize) -> f64 {
     // alpha = num_partition **(gamma - 1) * edge_count / vertex_count ** gamma
-    //return alpha * gamma * state.partition_sizes[partition] ** (gamma - 1)
+    //TODO: customize this: return alpha * gamma * state.partition_sizes[partition] ** (gamma - 1)
     0.0
 }
 
@@ -176,8 +215,7 @@ fn partition_vertex<T>(
     v: T,
     nbrs: &Vec<T>,
     state: &mut PartitionState<T>,
-    buffer_heap: &mut BinaryHeap<BufferEntry<T>>,
-    buffer_map: &mut HashMap<T, BufferEntry<T>>,
+    buffer: &mut BufferManager<T>,
     max_partition_size: usize,
 ) where
     T: Eq + Hash + Clone + Default,
@@ -195,40 +233,30 @@ fn partition_vertex<T>(
         }
     };
 
+    let nbrs_per_partition = vec![0, state.partition_sizes.len()];
     for nbr in nbrs {
         if let Some(&partition) = state.assignments.get(nbr)
             && state.partition_sizes[partition] < max_partition_size
         {
-            /*
-            nbr_count, last_v = part_nbr[p];
-            if(last_v != v) {nbr_count = 0, last_v = v};
-            nbr_count += 1;
-            */
-            let nbr_count = 1;
+            let nbr_count = nbrs_per_partition[partition] + 1;
             let score = nbr_count as f64 - compute_balance_score(partition);
             update_best_partition(partition, score);
         }
     }
 
-    if let Some(partition) = state
+    if let Some((partition, _)) = state
         .partition_sizes
         .iter()
         .enumerate()
         .min_by_key(|&(_, sz)| sz)
-        .map(|(i, _)| i)
     {
         update_best_partition(partition, -compute_balance_score(partition));
     }
 
-    state.assignments.insert(v, best_partition);
-    state.partition_sizes[best_partition] += 1;
+    state.assign(v.clone(), best_partition);
 
     for nbr in nbrs {
-        if let Some(mut entry) = buffer_map.remove(&nbr) {
-            entry.score += 2f64 / entry.nbrs.len() as f64;
-            buffer_heap.push(entry.clone()); // TODO: old ones must be removed or skipped
-            buffer_map.insert(nbr.clone(), entry);
-        }
+        buffer.update_score(nbr.clone());
     }
 }
 
