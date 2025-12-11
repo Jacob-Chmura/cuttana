@@ -17,8 +17,6 @@ impl<T> AdjacencyList<T> {
     pub fn new(data: Vec<VertexStreamEntry<T>>) -> Self {
         Self { data, pos: 0 }
     }
-
-    // TODO: Validate adjacency list has no duplicate vertices
 }
 
 impl<T: Copy> VertexStream for AdjacencyList<T> {

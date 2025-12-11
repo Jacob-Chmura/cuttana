@@ -21,12 +21,12 @@ pub struct CuttanaPartitionScorer {
 }
 
 impl CuttanaPartitionScorer {
-    pub fn new(num_partitions: usize, gamma: f64, vertex_count: usize, edge_count: usize) -> Self {
+    pub fn new(num_partitions: usize, gamma: f64) -> Self {
         Self {
             num_partitions,
             gamma,
-            vertex_count,
-            edge_count,
+            vertex_count: 0,
+            edge_count: 0,
             rng: rand::rng(),
         }
     }
@@ -41,10 +41,14 @@ impl CuttanaPartitionScorer {
 impl PartitionScorer for CuttanaPartitionScorer {
     fn find_best_partition<T: Eq + Hash + Clone>(
         &mut self,
-        _v: &T,
+        v: &T,
         nbrs: &Vec<T>,
         state: &PartitionState<T>,
     ) -> usize {
+        // Update approximate vertex/edge counts
+        self.vertex_count += 1;
+        self.edge_count += nbrs.len();
+
         // First candidate is just smallest partition
         let mut best_partition = state.smallest_partition();
         let mut best_score = -self.compute_score(state, best_partition);

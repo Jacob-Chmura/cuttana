@@ -58,17 +58,19 @@ pub fn cuttana_partition<T>(
     num_partitions: usize,
     max_partition_size: usize,
     max_buffer_size: usize,
-    degree_max: usize,
+    buffer_degree_threshold: usize,
 ) -> HashMap<T, usize>
 where
     T: Eq + Hash + Clone,
 {
     let mut buffer = BufferManager::<T>::new(max_buffer_size);
     let mut state = PartitionState::<T>::new(num_partitions, max_partition_size);
-    let mut scorer = CuttanaPartitionScorer::new(num_partitions, 1.5f64, 100, 100);
+
+    const GAMMA: f64 = 1.5;
+    let mut scorer = CuttanaPartitionScorer::new(num_partitions, GAMMA);
 
     while let Some((v, nbrs)) = stream.next_entry() {
-        if nbrs.len() >= degree_max {
+        if nbrs.len() >= buffer_degree_threshold {
             partition_vertex(&v, &nbrs, &mut state, &mut buffer, &mut scorer);
         } else {
             buffer.insert(&v, &nbrs, &state);
