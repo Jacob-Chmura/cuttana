@@ -27,11 +27,11 @@ where
         }
     }
 
-    pub fn insert(&mut self, v: &T, nbrs: &Vec<T>, state: &PartitionState<T>) {
+    pub fn insert(&mut self, v: &T, nbrs: &[T], state: &PartitionState<T>) {
         let entry = BufferEntry {
             score: compute_buffer_score(v, nbrs, state),
             vertex: v.clone(),
-            nbrs: nbrs.clone(),
+            nbrs: nbrs.to_vec(),
         };
         self.heap.push(entry.clone());
         self.map.insert(v.clone(), entry);
@@ -51,7 +51,7 @@ where
 
     pub fn update_score(&mut self, v: &T) {
         if let Some(mut entry) = self.map.remove(v) {
-            entry.score += 2f64 / entry.nbrs.len() as f64;
+            entry.score += 2.0 / entry.nbrs.len() as f64;
             self.heap.push(entry.clone()); // TODO: old one must be removed
             self.map.insert(v.clone(), entry);
         }
@@ -90,7 +90,7 @@ where
     }
 }
 
-fn compute_buffer_score<T>(_v: &T, nbrs: &Vec<T>, state: &PartitionState<T>) -> f64
+fn compute_buffer_score<T>(_v: &T, nbrs: &[T], state: &PartitionState<T>) -> f64
 where
     T: Eq + Hash,
 {

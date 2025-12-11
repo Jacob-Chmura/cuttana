@@ -7,7 +7,7 @@ pub trait PartitionScorer {
     fn find_best_partition<T: Eq + Hash + Clone>(
         &mut self,
         v: &T,
-        nbrs: &Vec<T>,
+        nbrs: &[T],
         state: &PartitionState<T>,
     ) -> usize;
 }
@@ -41,7 +41,7 @@ impl PartitionScorer for CuttanaPartitionScorer {
     fn find_best_partition<T: Eq + Hash + Clone>(
         &mut self,
         _v: &T,
-        nbrs: &Vec<T>,
+        nbrs: &[T],
         state: &PartitionState<T>,
     ) -> usize {
         // Update approximate vertex/edge counts
