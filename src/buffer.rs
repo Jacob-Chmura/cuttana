@@ -26,14 +26,14 @@ where
         }
     }
 
-    pub fn insert(&mut self, v: T, nbrs: &Vec<T>) {
+    pub fn insert(&mut self, v: &T, nbrs: &Vec<T>) {
         let entry = BufferEntry {
-            score: compute_buffer_score(v.clone(), &nbrs),
+            score: compute_buffer_score(v, nbrs),
             vertex: v.clone(),
             nbrs: nbrs.clone(),
         };
         self.heap.push(entry.clone());
-        self.map.insert(v, entry);
+        self.map.insert(v.clone(), entry);
     }
 
     pub fn is_at_capacity(&self) -> bool {
@@ -48,8 +48,8 @@ where
         None
     }
 
-    pub fn update_score(&mut self, v: T) {
-        if let Some(mut entry) = self.map.remove(&v) {
+    pub fn update_score(&mut self, v: &T) {
+        if let Some(mut entry) = self.map.remove(v) {
             entry.score += 2f64 / entry.nbrs.len() as f64;
             self.heap.push(entry.clone()); // TODO: old one must be removed
             self.map.insert(v.clone(), entry);
@@ -58,7 +58,7 @@ where
 }
 
 #[derive(Clone, PartialEq)]
-struct BufferEntry<T>
+pub(crate) struct BufferEntry<T>
 where
     T: Eq + Hash + Clone,
 {
@@ -89,7 +89,7 @@ where
     }
 }
 
-fn compute_buffer_score<T>(v: T, nbrs: &Vec<T>) -> f64 {
+fn compute_buffer_score<T>(v: &T, nbrs: &Vec<T>) -> f64 {
     // TODO: custimze this: 2 * cnt_adj_partitioned / nbrs.len() + nbr.len() / buffer_deg_threshold
     0.0
 }

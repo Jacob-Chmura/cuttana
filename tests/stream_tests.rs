@@ -15,5 +15,5 @@ fn test_iterate_adj_list() {
 #[test]
 fn test_empty_adj_list() {
     let mut stream: AdjacencyList<u32> = AdjacencyList::new(vec![]);
-    assert!(stream.next_vertex().is_none());
+    assert!(stream.next_entry().is_none());
 }

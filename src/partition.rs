@@ -37,16 +37,21 @@ impl<T> PartitionState<T> {
             .0
     }
 
-    pub fn has_room_in_partition_of(&self, v: T) -> bool
+    pub fn has_room_in_partition_of(&self, v: &T) -> bool
     where
         T: Eq + Hash,
     {
-        matches!(self.assignments.get(&v), Some(&partition) if self.partition_sizes[partition] < self.max_partition_size)
+        matches!(self.assignments.get(v), Some(&partition) if self.partition_sizes[partition] < self.max_partition_size)
     }
 }
 
-pub trait BalanceScorer<T> {
-    fn compute(&self, state: &PartitionState<T>, partition: usize) -> f64;
+pub trait BalanceScorer {
+    fn find_best_partition<T: Eq + Hash + Clone>(
+        &self,
+        v: &T,
+        nbrs: &Vec<T>,
+        state: &PartitionState<T>,
+    ) -> usize;
 }
 
 pub struct CuttanaBalanceScorer {
@@ -65,13 +70,48 @@ impl CuttanaBalanceScorer {
             edge_count,
         }
     }
-}
 
-impl<T> BalanceScorer<T> for CuttanaBalanceScorer {
-    fn compute(&self, state: &PartitionState<T>, partition: usize) -> f64 {
+    fn compute_score<T>(&self, state: &PartitionState<T>, partition: usize) -> f64 {
         let alpha = (self.num_partitions as f64).powf(self.gamma - 1.0) * (self.edge_count as f64)
             / (self.vertex_count as f64).powf(self.gamma);
         alpha * self.gamma * (state.partition_sizes[partition] as f64).powf(self.gamma - 1.0)
+    }
+}
+
+impl BalanceScorer for CuttanaBalanceScorer {
+    fn find_best_partition<T: Eq + Hash + Clone>(
+        &self,
+        v: &T,
+        nbrs: &Vec<T>,
+        state: &PartitionState<T>,
+    ) -> usize {
+        // First candidate is just smallest partition
+        let mut best_partition = state.smallest_partition();
+        let mut best_score = -self.compute_score(state, best_partition);
+        let mut tie_count = 1;
+
+        let mut update = |partition: usize, score: f64| {
+            if score > best_score {
+                (best_score, best_partition, tie_count) = (score, partition, 1);
+            } else if score == best_score {
+                // TODO: uniform integer sample [1, tie_count] inclusive with rng
+                tie_count += 1;
+                best_partition = partition;
+            }
+        };
+
+        let mut nbrs_per_partition = vec![0; state.partition_sizes.len()];
+        for nbr in nbrs {
+            if state.has_room_in_partition_of(nbr) {
+                let partition = state.assignments[nbr];
+                nbrs_per_partition[partition] += 1;
+                let score =
+                    nbrs_per_partition[partition] as f64 - self.compute_score(state, partition);
+                update(partition, score);
+            }
+        }
+
+        best_partition
     }
 }
 
@@ -89,29 +129,29 @@ where
     let mut state = PartitionState::<T>::new(num_partitions, max_partition_size);
     let balance_scorer = CuttanaBalanceScorer::new(num_partitions, 1.5f64, 100, 100);
 
-    while let Some((v, nbrs)) = stream.next_vertex() {
+    while let Some((v, nbrs)) = stream.next_entry() {
         if nbrs.len() >= degree_max {
-            partition_vertex(v, &nbrs, &mut state, &mut buffer, &balance_scorer);
+            partition_vertex(&v, &nbrs, &mut state, &mut buffer, &balance_scorer);
         } else {
-            buffer.insert(v, &nbrs);
+            buffer.insert(&v, &nbrs);
         }
 
         if buffer.is_at_capacity()
             && let Some((v, nbrs)) = buffer.evict()
         {
-            partition_vertex(v, &nbrs, &mut state, &mut buffer, &balance_scorer);
+            partition_vertex(&v, &nbrs, &mut state, &mut buffer, &balance_scorer);
         }
     }
 
     while let Some((v, nbrs)) = buffer.evict() {
-        partition_vertex(v, &nbrs, &mut state, &mut buffer, &balance_scorer);
+        partition_vertex(&v, &nbrs, &mut state, &mut buffer, &balance_scorer);
     }
 
     state.assignments
 }
 
-fn partition_vertex<T, B: BalanceScorer<T>>(
-    v: T,
+fn partition_vertex<T, B: BalanceScorer>(
+    v: &T,
     nbrs: &Vec<T>,
     state: &mut PartitionState<T>,
     buffer: &mut BufferManager<T>,
@@ -119,35 +159,9 @@ fn partition_vertex<T, B: BalanceScorer<T>>(
 ) where
     T: Eq + Hash + Clone + Default,
 {
-    // find best partition among the K partitions
-    let (mut best_score, mut best_partition, mut tie_count) = (f64::NEG_INFINITY, 0, 0);
-
-    let mut update_best_partition_candidate = |partition: usize, score: f64| {
-        if score > best_score {
-            (best_score, best_partition, tie_count) = (score, partition, 1);
-        } else if score == best_score {
-            tie_count += 1;
-            // TODO: uniform integer sample [1, tie_count] inclusive with rng
-            best_partition = partition;
-        }
-    };
-
-    let mut nbrs_per_partition = vec![0; state.partition_sizes.len()];
+    let best_partition = balance_scorer.find_best_partition(v, nbrs, state);
+    state.assign(v.clone(), best_partition);
     for nbr in nbrs {
-        if state.has_room_in_partition_of(nbr.clone()) {
-            let partition = state.assignments[nbr];
-            nbrs_per_partition[partition] += 1;
-            let score =
-                nbrs_per_partition[partition] as f64 - balance_scorer.compute(state, partition);
-            update_best_partition_candidate(partition, score);
-        }
-    }
-
-    let partition = state.smallest_partition();
-    update_best_partition_candidate(partition, -balance_scorer.compute(state, partition));
-
-    state.assign(v, best_partition);
-    for nbr in nbrs {
-        buffer.update_score(nbr.clone());
+        buffer.update_score(nbr);
     }
 }
