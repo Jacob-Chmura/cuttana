@@ -1,7 +1,7 @@
 use crate::partition::PartitionState;
 use std::hash::Hash;
 
-pub trait BalanceScorer {
+pub trait PartitionScorer {
     fn find_best_partition<T: Eq + Hash + Clone>(
         &self,
         v: &T,
@@ -10,14 +10,14 @@ pub trait BalanceScorer {
     ) -> usize;
 }
 
-pub struct CuttanaBalanceScorer {
+pub struct CuttanaPartitionScorer {
     num_partitions: usize,
     gamma: f64,
     vertex_count: usize,
     edge_count: usize,
 }
 
-impl CuttanaBalanceScorer {
+impl CuttanaPartitionScorer {
     pub fn new(num_partitions: usize, gamma: f64, vertex_count: usize, edge_count: usize) -> Self {
         Self {
             num_partitions,
@@ -34,7 +34,7 @@ impl CuttanaBalanceScorer {
     }
 }
 
-impl BalanceScorer for CuttanaBalanceScorer {
+impl PartitionScorer for CuttanaPartitionScorer {
     fn find_best_partition<T: Eq + Hash + Clone>(
         &self,
         v: &T,

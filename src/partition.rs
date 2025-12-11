@@ -1,5 +1,5 @@
 use crate::buffer::BufferManager;
-use crate::scorer::{BalanceScorer, CuttanaBalanceScorer};
+use crate::scorer::{CuttanaPartitionScorer, PartitionScorer};
 use crate::stream::VertexStream;
 use std::collections::HashMap;
 use std::hash::Hash;
@@ -49,7 +49,7 @@ impl<T> PartitionState<T> {
 
     pub fn has_room_in_partition(&self, partition: usize) -> bool {
         // TODO: Check out of bounds
-        return self.partition_sizes[partition] < self.max_partition_size;
+        self.partition_sizes[partition] < self.max_partition_size
     }
 }
 
@@ -65,39 +65,39 @@ where
 {
     let mut buffer = BufferManager::<T>::new(max_buffer_size);
     let mut state = PartitionState::<T>::new(num_partitions, max_partition_size);
-    let balance_scorer = CuttanaBalanceScorer::new(num_partitions, 1.5f64, 100, 100);
+    let scorer = CuttanaPartitionScorer::new(num_partitions, 1.5f64, 100, 100);
 
     while let Some((v, nbrs)) = stream.next_entry() {
         if nbrs.len() >= degree_max {
-            partition_vertex(&v, &nbrs, &mut state, &mut buffer, &balance_scorer);
+            partition_vertex(&v, &nbrs, &mut state, &mut buffer, &scorer);
         } else {
-            buffer.insert(&v, &nbrs);
+            buffer.insert(&v, &nbrs, &state);
         }
 
         if buffer.is_at_capacity()
             && let Some((v, nbrs)) = buffer.evict()
         {
-            partition_vertex(&v, &nbrs, &mut state, &mut buffer, &balance_scorer);
+            partition_vertex(&v, &nbrs, &mut state, &mut buffer, &scorer);
         }
     }
 
     while let Some((v, nbrs)) = buffer.evict() {
-        partition_vertex(&v, &nbrs, &mut state, &mut buffer, &balance_scorer);
+        partition_vertex(&v, &nbrs, &mut state, &mut buffer, &scorer);
     }
 
     state.assignments
 }
 
-fn partition_vertex<T, B: BalanceScorer>(
+fn partition_vertex<T, B: PartitionScorer>(
     v: &T,
     nbrs: &Vec<T>,
     state: &mut PartitionState<T>,
     buffer: &mut BufferManager<T>,
-    balance_scorer: &B,
+    scorer: &B,
 ) where
     T: Eq + Hash + Clone,
 {
-    let best_partition = balance_scorer.find_best_partition(v, nbrs, state);
+    let best_partition = scorer.find_best_partition(v, nbrs, state);
     state.assign(v.clone(), best_partition);
     for nbr in nbrs {
         buffer.update_score(nbr);

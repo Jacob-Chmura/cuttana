@@ -1,3 +1,4 @@
+use crate::partition::PartitionState;
 use core::f64;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
@@ -26,9 +27,9 @@ where
         }
     }
 
-    pub fn insert(&mut self, v: &T, nbrs: &Vec<T>) {
+    pub fn insert(&mut self, v: &T, nbrs: &Vec<T>, state: &PartitionState<T>) {
         let entry = BufferEntry {
-            score: compute_buffer_score(v, nbrs),
+            score: compute_buffer_score(v, nbrs, state),
             vertex: v.clone(),
             nbrs: nbrs.clone(),
         };
@@ -89,7 +90,19 @@ where
     }
 }
 
-fn compute_buffer_score<T>(v: &T, nbrs: &Vec<T>) -> f64 {
-    // TODO: custimze this: 2 * cnt_adj_partitioned / nbrs.len() + nbr.len() / buffer_deg_threshold
-    0.0
+fn compute_buffer_score<T>(_v: &T, nbrs: &Vec<T>, state: &PartitionState<T>) -> f64
+where
+    T: Eq + Hash,
+{
+    // TODO: make this generic
+    const THETA: f64 = 2.0;
+    const BUFFER_DEG_THRESHOLD: f64 = 100.0;
+
+    let degree = nbrs.len() as f64;
+    let num_nbrs_partitioned = nbrs
+        .iter()
+        .filter(|nbr| state.get_partition_of(nbr).is_some())
+        .count() as f64;
+
+    THETA * (num_nbrs_partitioned / degree) + (degree / BUFFER_DEG_THRESHOLD)
 }
