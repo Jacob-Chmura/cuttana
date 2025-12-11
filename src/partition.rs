@@ -1,4 +1,5 @@
 use crate::buffer::BufferManager;
+use crate::scorer::{BalanceScorer, CuttanaBalanceScorer};
 use crate::stream::VertexStream;
 use std::collections::HashMap;
 use std::hash::Hash;
@@ -8,6 +9,7 @@ pub struct PartitionState<T> {
     assignments: HashMap<T, usize>,
     partition_sizes: Vec<usize>,
     max_partition_size: usize,
+    pub num_partitions: usize,
 }
 
 impl<T> PartitionState<T> {
@@ -16,6 +18,7 @@ impl<T> PartitionState<T> {
             assignments: HashMap::new(),
             partition_sizes: vec![0; num_partitions],
             max_partition_size,
+            num_partitions,
         }
     }
 
@@ -25,6 +28,13 @@ impl<T> PartitionState<T> {
     {
         self.assignments.insert(v, partition);
         self.partition_sizes[partition] += 1;
+    }
+
+    pub fn get_partition_of(&self, v: &T) -> Option<usize>
+    where
+        T: Eq + Hash,
+    {
+        self.assignments.get(v).copied()
     }
 
     pub fn smallest_partition(&self) -> usize {
@@ -37,81 +47,9 @@ impl<T> PartitionState<T> {
             .0
     }
 
-    pub fn has_room_in_partition_of(&self, v: &T) -> bool
-    where
-        T: Eq + Hash,
-    {
-        matches!(self.assignments.get(v), Some(&partition) if self.partition_sizes[partition] < self.max_partition_size)
-    }
-}
-
-pub trait BalanceScorer {
-    fn find_best_partition<T: Eq + Hash + Clone>(
-        &self,
-        v: &T,
-        nbrs: &Vec<T>,
-        state: &PartitionState<T>,
-    ) -> usize;
-}
-
-pub struct CuttanaBalanceScorer {
-    num_partitions: usize,
-    gamma: f64,
-    vertex_count: usize,
-    edge_count: usize,
-}
-
-impl CuttanaBalanceScorer {
-    pub fn new(num_partitions: usize, gamma: f64, vertex_count: usize, edge_count: usize) -> Self {
-        Self {
-            num_partitions,
-            gamma,
-            vertex_count,
-            edge_count,
-        }
-    }
-
-    fn compute_score<T>(&self, state: &PartitionState<T>, partition: usize) -> f64 {
-        let alpha = (self.num_partitions as f64).powf(self.gamma - 1.0) * (self.edge_count as f64)
-            / (self.vertex_count as f64).powf(self.gamma);
-        alpha * self.gamma * (state.partition_sizes[partition] as f64).powf(self.gamma - 1.0)
-    }
-}
-
-impl BalanceScorer for CuttanaBalanceScorer {
-    fn find_best_partition<T: Eq + Hash + Clone>(
-        &self,
-        v: &T,
-        nbrs: &Vec<T>,
-        state: &PartitionState<T>,
-    ) -> usize {
-        // First candidate is just smallest partition
-        let mut best_partition = state.smallest_partition();
-        let mut best_score = -self.compute_score(state, best_partition);
-        let mut tie_count = 1;
-
-        let mut update = |partition: usize, score: f64| {
-            if score > best_score {
-                (best_score, best_partition, tie_count) = (score, partition, 1);
-            } else if score == best_score {
-                // TODO: uniform integer sample [1, tie_count] inclusive with rng
-                tie_count += 1;
-                best_partition = partition;
-            }
-        };
-
-        let mut nbrs_per_partition = vec![0; state.partition_sizes.len()];
-        for nbr in nbrs {
-            if state.has_room_in_partition_of(nbr) {
-                let partition = state.assignments[nbr];
-                nbrs_per_partition[partition] += 1;
-                let score =
-                    nbrs_per_partition[partition] as f64 - self.compute_score(state, partition);
-                update(partition, score);
-            }
-        }
-
-        best_partition
+    pub fn has_room_in_partition(&self, partition: usize) -> bool {
+        // TODO: Check out of bounds
+        return self.partition_sizes[partition] < self.max_partition_size;
     }
 }
 
@@ -123,7 +61,7 @@ pub fn cuttana_partition<T>(
     degree_max: usize,
 ) -> HashMap<T, usize>
 where
-    T: Eq + Hash + Clone + Default,
+    T: Eq + Hash + Clone,
 {
     let mut buffer = BufferManager::<T>::new(max_buffer_size);
     let mut state = PartitionState::<T>::new(num_partitions, max_partition_size);
@@ -157,7 +95,7 @@ fn partition_vertex<T, B: BalanceScorer>(
     buffer: &mut BufferManager<T>,
     balance_scorer: &B,
 ) where
-    T: Eq + Hash + Clone + Default,
+    T: Eq + Hash + Clone,
 {
     let best_partition = balance_scorer.find_best_partition(v, nbrs, state);
     state.assign(v.clone(), best_partition);
