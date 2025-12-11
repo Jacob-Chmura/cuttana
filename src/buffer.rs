@@ -6,30 +6,34 @@ use std::collections::HashMap;
 use std::hash::Hash;
 
 /// Manages buffered vertices which are not ready to partition
-pub(crate) struct BufferManager<T>
+pub(crate) struct BufferManager<T, S>
 where
     T: Eq + Clone + Hash,
+    S: BufferScorer,
 {
     heap: BinaryHeap<BufferEntry<T>>,
     map: HashMap<T, BufferEntry<T>>,
     capacity: usize,
+    scorer: S,
 }
 
-impl<T> BufferManager<T>
+impl<T, S> BufferManager<T, S>
 where
     T: Eq + Clone + Hash,
+    S: BufferScorer,
 {
-    pub fn new(capacity: usize) -> Self {
+    pub fn new(capacity: usize, scorer: S) -> Self {
         Self {
             heap: BinaryHeap::new(),
             map: HashMap::new(),
             capacity,
+            scorer,
         }
     }
 
     pub fn insert(&mut self, v: &T, nbrs: &[T], state: &PartitionState<T>) {
         let entry = BufferEntry {
-            score: compute_buffer_score(v, nbrs, state),
+            score: self.scorer.score(v, nbrs, state),
             vertex: v.clone(),
             nbrs: nbrs.to_vec(),
         };
@@ -90,19 +94,32 @@ where
     }
 }
 
-fn compute_buffer_score<T>(_v: &T, nbrs: &[T], state: &PartitionState<T>) -> f64
-where
-    T: Eq + Hash,
-{
-    // TODO: make this generic
-    const THETA: f64 = 2.0;
-    const BUFFER_DEG_THRESHOLD: f64 = 100.0;
+pub trait BufferScorer {
+    fn score<T: Eq + Hash + Clone>(&self, v: &T, nbrs: &[T], state: &PartitionState<T>) -> f64;
+}
 
-    let degree = nbrs.len() as f64;
-    let num_nbrs_partitioned = nbrs
-        .iter()
-        .filter(|nbr| state.get_partition_of(nbr).is_some())
-        .count() as f64;
+pub struct CuttanaBufferScorer {
+    theta: f64,
+    buffer_deg_threshold: f64,
+}
 
-    THETA * (num_nbrs_partitioned / degree) + (degree / BUFFER_DEG_THRESHOLD)
+impl CuttanaBufferScorer {
+    pub fn new(theta: f64, buffer_deg_threshold: f64) -> Self {
+        Self {
+            theta,
+            buffer_deg_threshold,
+        }
+    }
+}
+
+impl BufferScorer for CuttanaBufferScorer {
+    fn score<T: Eq + Hash + Clone>(&self, _v: &T, nbrs: &[T], state: &PartitionState<T>) -> f64 {
+        let degree = nbrs.len() as f64;
+        let num_nbrs_partitioned = nbrs
+            .iter()
+            .filter(|nbr| state.get_partition_of(nbr).is_some())
+            .count() as f64;
+
+        self.theta * (num_nbrs_partitioned / degree) + (degree / self.buffer_deg_threshold)
+    }
 }
