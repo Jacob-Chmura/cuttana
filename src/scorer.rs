@@ -13,7 +13,6 @@ pub trait PartitionScorer {
 }
 
 pub struct CuttanaPartitionScorer {
-    num_partitions: usize,
     gamma: f64,
     vertex_count: usize,
     edge_count: usize,
@@ -21,9 +20,8 @@ pub struct CuttanaPartitionScorer {
 }
 
 impl CuttanaPartitionScorer {
-    pub fn new(num_partitions: usize, gamma: f64) -> Self {
+    pub fn new(gamma: f64) -> Self {
         Self {
-            num_partitions,
             gamma,
             vertex_count: 0,
             edge_count: 0,
@@ -32,16 +30,17 @@ impl CuttanaPartitionScorer {
     }
 
     fn compute_score<T>(&self, state: &PartitionState<T>, _partition: usize) -> f64 {
-        let alpha = (self.num_partitions as f64).powf(self.gamma - 1.0) * (self.edge_count as f64)
+        let num_partitions = state.num_partitions as f64;
+        let alpha = num_partitions.powf(self.gamma - 1.0) * (self.edge_count as f64)
             / (self.vertex_count as f64).powf(self.gamma);
-        alpha * self.gamma * (state.num_partitions as f64).powf(self.gamma - 1.0)
+        alpha * self.gamma * num_partitions.powf(self.gamma - 1.0)
     }
 }
 
 impl PartitionScorer for CuttanaPartitionScorer {
     fn find_best_partition<T: Eq + Hash + Clone>(
         &mut self,
-        v: &T,
+        _v: &T,
         nbrs: &Vec<T>,
         state: &PartitionState<T>,
     ) -> usize {

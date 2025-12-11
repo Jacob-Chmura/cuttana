@@ -38,7 +38,6 @@ impl<T> PartitionState<T> {
     }
 
     pub fn smallest_partition(&self) -> usize {
-        // TODO: Switch from usize to std::Nonzero for unwrap
         self.partition_sizes
             .iter()
             .enumerate()
@@ -48,8 +47,7 @@ impl<T> PartitionState<T> {
     }
 
     pub fn has_room_in_partition(&self, partition: usize) -> bool {
-        // TODO: Check out of bounds
-        self.partition_sizes[partition] < self.max_partition_size
+        partition < self.num_partitions && self.partition_sizes[partition] < self.max_partition_size
     }
 }
 
@@ -63,11 +61,14 @@ pub fn cuttana_partition<T>(
 where
     T: Eq + Hash + Clone,
 {
+    assert!(num_partitions > 0, "Number of partitions must be > 0");
+    assert!(max_partition_size > 0, "Max partition size must be > 0");
+
     let mut buffer = BufferManager::<T>::new(max_buffer_size);
     let mut state = PartitionState::<T>::new(num_partitions, max_partition_size);
 
     const GAMMA: f64 = 1.5;
-    let mut scorer = CuttanaPartitionScorer::new(num_partitions, GAMMA);
+    let mut scorer = CuttanaPartitionScorer::new(GAMMA);
 
     while let Some((v, nbrs)) = stream.next_entry() {
         if nbrs.len() >= buffer_degree_threshold {
