@@ -1,96 +1,115 @@
 use crate::partition::PartitionState;
-use core::f64;
-use std::cmp::Ordering;
-use std::collections::BinaryHeap;
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::hash::Hash;
 
 /// Manages buffered vertices which are not ready to partition
 pub(crate) struct BufferManager<T, S>
 where
-    T: Eq + Clone + Hash,
+    T: Eq + Clone + Hash + Ord,
     S: BufferScorer,
 {
-    heap: BinaryHeap<BufferEntry<T>>,
-    map: HashMap<T, BufferEntry<T>>,
+    tree: BTreeMap<BufferKey<T>, Vec<T>>, // key: (score, vertex) -> nbrs)
+    map: HashMap<T, f64>,                 // vertex -> score
     capacity: usize,
     scorer: S,
 }
 
 impl<T, S> BufferManager<T, S>
 where
-    T: Eq + Clone + Hash,
+    T: Eq + Clone + Hash + Ord,
     S: BufferScorer,
 {
     pub fn new(capacity: usize, scorer: S) -> Self {
         Self {
-            heap: BinaryHeap::new(),
+            tree: BTreeMap::new(),
             map: HashMap::new(),
             capacity,
             scorer,
         }
     }
 
-    pub fn insert(&mut self, v: &T, nbrs: &[T], state: &PartitionState<T>) {
-        let entry = BufferEntry {
-            score: self.scorer.score(v, nbrs, state),
-            vertex: v.clone(),
-            nbrs: nbrs.to_vec(),
-        };
-        self.heap.push(entry.clone());
-        self.map.insert(v.clone(), entry);
+    pub fn is_at_capacity(&self) -> bool {
+        self.map.len() >= self.capacity
     }
 
-    pub fn is_at_capacity(&self) -> bool {
-        self.heap.len() >= self.capacity
+    pub fn insert(&mut self, v: &T, nbrs: &[T], state: &PartitionState<T>) {
+        let score = self.scorer.score(v, nbrs, state);
+        let key = BufferKey {
+            score,
+            vertex: v.clone(),
+        };
+        self.map.insert(v.clone(), score);
+        self.tree.insert(key, nbrs.to_vec());
     }
 
     pub fn evict(&mut self) -> Option<(T, Vec<T>)> {
-        if let Some(entry) = self.heap.pop() {
-            self.map.remove(&entry.vertex);
-            return Some((entry.vertex, entry.nbrs));
+        if let Some((key, nbrs)) = self.tree.last_key_value() {
+            let v = key.vertex.clone();
+            let score = key.score;
+            let nbrs_cloned = nbrs.clone();
+
+            self.tree.remove(&BufferKey {
+                score,
+                vertex: v.clone(),
+            });
+            self.map.remove(&v);
+
+            return Some((v, nbrs_cloned));
         }
         None
     }
 
     pub fn update_score(&mut self, v: &T) {
-        if let Some(mut entry) = self.map.remove(v) {
-            entry.score += 2.0 / entry.nbrs.len() as f64;
-            self.heap.push(entry.clone()); // TODO: old one must be removed
-            self.map.insert(v.clone(), entry);
-        }
+        let old_score = match self.map.get(v).copied() {
+            Some(s) => s,
+            None => return,
+        };
+
+        let key = BufferKey {
+            score: old_score,
+            vertex: v.clone(),
+        };
+        let nbrs = self.tree.remove(&key).unwrap();
+
+        // TODO: Make generic
+        let new_score = old_score + 2.0 / nbrs.len() as f64;
+        let new_key = BufferKey {
+            score: new_score,
+            vertex: v.clone(),
+        };
+
+        self.tree.insert(new_key, nbrs);
+        self.map.insert(v.clone(), new_score);
     }
 }
 
-#[derive(Clone, PartialEq)]
-pub(crate) struct BufferEntry<T>
-where
-    T: Eq + Hash + Clone,
-{
-    score: f64,
-    vertex: T,
-    nbrs: Vec<T>,
+#[derive(Clone)]
+pub(crate) struct BufferKey<T> {
+    pub score: f64,
+    pub vertex: T,
 }
 
-impl<T> Eq for BufferEntry<T> where T: Eq + Hash + Clone {}
-
-impl<T> Ord for BufferEntry<T>
-where
-    T: Eq + Hash + Clone,
-{
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.score
-            .partial_cmp(&other.score)
-            .unwrap_or(Ordering::Equal)
+impl<T: Ord> PartialEq for BufferKey<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.score == other.score && self.vertex == other.vertex
     }
 }
+impl<T: Ord> Eq for BufferKey<T> {}
 
-impl<T> PartialOrd for BufferEntry<T>
-where
-    T: Eq + Hash + Clone,
-{
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+impl<T: Ord> PartialOrd for BufferKey<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
+    }
+}
+
+impl<T: Ord> Ord for BufferKey<T> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        match self.score.partial_cmp(&other.score) {
+            Some(std::cmp::Ordering::Equal) => self.vertex.cmp(&other.vertex),
+            Some(ord) => ord,
+            None => std::cmp::Ordering::Equal,
+        }
     }
 }
 

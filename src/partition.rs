@@ -59,7 +59,7 @@ pub fn cuttana_partition<T>(
     buffer_degree_threshold: usize,
 ) -> HashMap<T, usize>
 where
-    T: Eq + Hash + Clone,
+    T: Eq + Hash + Clone + Ord,
 {
     assert!(num_partitions > 0, "Number of partitions must be > 0");
     assert!(max_partition_size > 0, "Max partition size must be > 0");
@@ -101,7 +101,7 @@ fn partition_vertex<T, B: PartitionScorer, S: BufferScorer>(
     buffer: &mut BufferManager<T, S>,
     scorer: &mut B,
 ) where
-    T: Eq + Hash + Clone,
+    T: Eq + Hash + Clone + Ord,
 {
     let best_partition = scorer.find_best_partition(v, nbrs, state);
     state.assign(v.clone(), best_partition);
