@@ -1,9 +1,11 @@
 use crate::partition::PartitionState;
+use rand::Rng;
+use rand::rngs::ThreadRng;
 use std::hash::Hash;
 
 pub trait PartitionScorer {
     fn find_best_partition<T: Eq + Hash + Clone>(
-        &self,
+        &mut self,
         v: &T,
         nbrs: &Vec<T>,
         state: &PartitionState<T>,
@@ -15,6 +17,7 @@ pub struct CuttanaPartitionScorer {
     gamma: f64,
     vertex_count: usize,
     edge_count: usize,
+    rng: ThreadRng,
 }
 
 impl CuttanaPartitionScorer {
@@ -24,10 +27,11 @@ impl CuttanaPartitionScorer {
             gamma,
             vertex_count,
             edge_count,
+            rng: rand::rng(),
         }
     }
 
-    fn compute_score<T>(&self, state: &PartitionState<T>, partition: usize) -> f64 {
+    fn compute_score<T>(&self, state: &PartitionState<T>, _partition: usize) -> f64 {
         let alpha = (self.num_partitions as f64).powf(self.gamma - 1.0) * (self.edge_count as f64)
             / (self.vertex_count as f64).powf(self.gamma);
         alpha * self.gamma * (state.num_partitions as f64).powf(self.gamma - 1.0)
@@ -36,8 +40,8 @@ impl CuttanaPartitionScorer {
 
 impl PartitionScorer for CuttanaPartitionScorer {
     fn find_best_partition<T: Eq + Hash + Clone>(
-        &self,
-        v: &T,
+        &mut self,
+        _v: &T,
         nbrs: &Vec<T>,
         state: &PartitionState<T>,
     ) -> usize {
@@ -46,13 +50,14 @@ impl PartitionScorer for CuttanaPartitionScorer {
         let mut best_score = -self.compute_score(state, best_partition);
         let mut tie_count = 1;
 
-        let mut update = |partition: usize, score: f64| {
+        let mut update = |partition: usize, score: f64, rng: &mut ThreadRng| {
             if score > best_score {
                 (best_score, best_partition, tie_count) = (score, partition, 1);
             } else if score == best_score {
-                // TODO: uniform integer sample [1, tie_count] inclusive with rng
                 tie_count += 1;
-                best_partition = partition;
+                if rng.random_ratio(1, tie_count) {
+                    best_partition = partition;
+                }
             }
         };
 
@@ -64,7 +69,7 @@ impl PartitionScorer for CuttanaPartitionScorer {
                 nbrs_per_partition[partition] += 1;
                 let score =
                     nbrs_per_partition[partition] as f64 - self.compute_score(state, partition);
-                update(partition, score);
+                update(partition, score, &mut self.rng);
             }
         }
 

@@ -65,11 +65,11 @@ where
 {
     let mut buffer = BufferManager::<T>::new(max_buffer_size);
     let mut state = PartitionState::<T>::new(num_partitions, max_partition_size);
-    let scorer = CuttanaPartitionScorer::new(num_partitions, 1.5f64, 100, 100);
+    let mut scorer = CuttanaPartitionScorer::new(num_partitions, 1.5f64, 100, 100);
 
     while let Some((v, nbrs)) = stream.next_entry() {
         if nbrs.len() >= degree_max {
-            partition_vertex(&v, &nbrs, &mut state, &mut buffer, &scorer);
+            partition_vertex(&v, &nbrs, &mut state, &mut buffer, &mut scorer);
         } else {
             buffer.insert(&v, &nbrs, &state);
         }
@@ -77,12 +77,12 @@ where
         if buffer.is_at_capacity()
             && let Some((v, nbrs)) = buffer.evict()
         {
-            partition_vertex(&v, &nbrs, &mut state, &mut buffer, &scorer);
+            partition_vertex(&v, &nbrs, &mut state, &mut buffer, &mut scorer);
         }
     }
 
     while let Some((v, nbrs)) = buffer.evict() {
-        partition_vertex(&v, &nbrs, &mut state, &mut buffer, &scorer);
+        partition_vertex(&v, &nbrs, &mut state, &mut buffer, &mut scorer);
     }
 
     state.assignments
@@ -93,7 +93,7 @@ fn partition_vertex<T, B: PartitionScorer>(
     nbrs: &Vec<T>,
     state: &mut PartitionState<T>,
     buffer: &mut BufferManager<T>,
-    scorer: &B,
+    scorer: &mut B,
 ) where
     T: Eq + Hash + Clone,
 {
