@@ -1,17 +1,17 @@
-use cuttana::cuttana_partition;
+use cuttana::partition;
 use cuttana::result::PartitionResult;
-use cuttana::stream::AdjacencyList;
+use cuttana::stream::VertexStream;
 
 #[test]
 fn test_cuttana() {
     let data = vec![(0, vec![1, 2]), (1, vec![0]), (2, vec![0])];
-    let stream = AdjacencyList::new(data.clone());
+    let stream = VertexStream::from_adjacency_list(data);
     const NUM_PARTITIONS: usize = 16;
     const MAX_PARTITION_SIZE: usize = 1024;
     const MAX_BUFFER_SIZE: usize = 1_000_000;
     const DEGREE_MAX: usize = 1000;
 
-    let result: PartitionResult<i32> = cuttana_partition(
+    let result: PartitionResult<i32> = partition(
         stream,
         NUM_PARTITIONS,
         MAX_PARTITION_SIZE,

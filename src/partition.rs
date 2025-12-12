@@ -5,8 +5,8 @@ use crate::state::PartitionState;
 use crate::stream::VertexStream;
 use std::hash::Hash;
 
-pub fn cuttana_partition<T>(
-    mut stream: impl VertexStream<VertexID = T>,
+pub fn partition<T>(
+    stream: VertexStream<T>,
     num_partitions: usize,
     max_partition_size: usize,
     max_buffer_size: usize,
@@ -27,7 +27,7 @@ where
     let mut buffer = BufferManager::<T, CuttanaBufferScorer>::new(max_buffer_size, buffer_scorer);
     let mut state = PartitionState::<T>::new(num_partitions, max_partition_size);
 
-    while let Some((v, nbrs)) = stream.next_entry() {
+    for (v, nbrs) in stream {
         state.vertex_count += 1;
         state.edge_count += nbrs.len();
 

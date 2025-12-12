@@ -2,7 +2,7 @@ pub mod result;
 pub mod stream;
 
 mod partition;
-pub use partition::cuttana_partition;
+pub use partition::partition;
 
 pub(crate) mod buffer;
 pub(crate) mod scorer;

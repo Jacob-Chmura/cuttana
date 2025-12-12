@@ -1,9 +1,9 @@
-use cuttana::stream::{AdjacencyList, VertexStream};
+use cuttana::stream::VertexStream;
 
 #[test]
 fn test_iterate_adj_list() {
     let data = vec![(0, vec![1, 2]), (1, vec![0]), (2, vec![0])];
-    let mut stream = AdjacencyList::new(data.clone());
+    let mut stream = VertexStream::from_adjacency_list(data.clone());
 
     let mut seen = vec![];
     for (v, nbrs) in &mut stream {
@@ -14,6 +14,6 @@ fn test_iterate_adj_list() {
 
 #[test]
 fn test_empty_adj_list() {
-    let mut stream: AdjacencyList<u32> = AdjacencyList::new(vec![]);
-    assert!(stream.next_entry().is_none());
+    let mut stream = VertexStream::<usize>::from_adjacency_list(vec![]);
+    assert!(stream.next().is_none());
 }

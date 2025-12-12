@@ -1,38 +1,70 @@
+use std::fs::File;
+use std::io::{BufRead, BufReader};
+use std::str::FromStr;
+
+pub enum Delimiter {
+    Space,
+    Comma,
+}
+
 /// A type alias for a vertex and it's neighbors
 type VertexStreamEntry<T> = (T, Vec<T>);
 
 /// A pull-based vertex-stream. Consumers call `next_entry()` until None
-pub trait VertexStream {
-    type VertexID;
-
-    fn next_entry(&mut self) -> Option<VertexStreamEntry<Self::VertexID>>;
+pub struct VertexStream<T> {
+    inner: Box<dyn Iterator<Item = VertexStreamEntry<T>>>,
 }
 
-pub struct AdjacencyList<T> {
-    data: Vec<(T, Vec<T>)>,
-    pos: usize,
-}
+impl<T> VertexStream<T>
+where
+    T: 'static + FromStr + Clone,
+    <T as FromStr>::Err: std::fmt::Debug,
+{
+    pub fn from_csv(path: &str, delimiter: Delimiter) -> std::io::Result<Self> {
+        let file = File::open(path)?;
+        let reader = BufReader::new(file);
+        let delim = delimiter;
 
-impl<T> AdjacencyList<T> {
-    pub fn new(data: Vec<VertexStreamEntry<T>>) -> Self {
-        Self { data, pos: 0 }
+        let iter = reader.lines().filter_map(move |line| {
+            let line = line.ok()?.trim().to_string();
+            if line.is_empty() {
+                return None;
+            }
+
+            let items: Vec<&str> = match delim {
+                Delimiter::Space => line.split_whitespace().collect(),
+                Delimiter::Comma => line.split(',').map(|s| s.trim()).collect(),
+            };
+
+            if items.is_empty() {
+                return None;
+            }
+
+            let v = items[0].parse::<T>().expect("Failed to parse vertex ID");
+            let nbrs = items[1..]
+                .iter()
+                .map(|s| s.parse::<T>().expect("Failed to parse neighbors"))
+                .collect();
+
+            Some((v, nbrs))
+        });
+
+        Ok(Self {
+            inner: Box::new(iter),
+        })
+    }
+
+    pub fn from_adjacency_list(data: Vec<VertexStreamEntry<T>>) -> Self {
+        Self {
+            inner: Box::new(data.into_iter()),
+        }
     }
 }
 
-impl<T: Copy> VertexStream for AdjacencyList<T> {
-    type VertexID = T;
-
-    fn next_entry(&mut self) -> Option<VertexStreamEntry<Self::VertexID>> {
-        let out = self.data.get(self.pos)?.clone();
-        self.pos += 1;
-        Some(out)
-    }
-}
-
-impl<T: Copy> Iterator for AdjacencyList<T> {
+impl<T> Iterator for VertexStream<T> {
     type Item = VertexStreamEntry<T>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.next_entry()
+        self.inner.next()
     }
 }
