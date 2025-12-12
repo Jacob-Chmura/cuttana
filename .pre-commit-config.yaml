@@ -1,18 +1,17 @@
 ---
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
       - id: no-commit-to-branch
-        name: No commits to master
       - id: end-of-file-fixer
-        name: End-of-file fixer
-      - name: mixed-line-ending
-        id: mixed-line-ending
-        args: [--fix, lf]
+      - id: mixed-line-ending
       - id: trailing-whitespace
-        name: Remove trailing whitespaces
       - id: check-toml
-        name: Check toml
       - id: check-yaml
-        name: Check yaml
+
+  - repo: https://github.com/FeryET/pre-commit-rust
+    rev: v1.2.1
+    hooks:
+      - id: fmt
+      - id: cargo-check
