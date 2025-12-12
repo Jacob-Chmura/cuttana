@@ -11,7 +11,7 @@ where
 {
     tree: BTreeMap<BufferKey<T>, Vec<T>>, // key: (score, vertex) -> nbrs)
     map: HashMap<T, f64>,                 // vertex -> score
-    capacity: usize,
+    capacity: u64,
     scorer: S,
 }
 
@@ -20,7 +20,7 @@ where
     T: Eq + Clone + Hash + Ord,
     S: BufferScorer,
 {
-    pub fn new(capacity: usize, scorer: S) -> Self {
+    pub fn new(capacity: u64, scorer: S) -> Self {
         Self {
             tree: BTreeMap::new(),
             map: HashMap::new(),
@@ -30,7 +30,7 @@ where
     }
 
     pub fn is_at_capacity(&self) -> bool {
-        self.map.len() >= self.capacity
+        self.map.len() as u64 >= self.capacity
     }
 
     pub fn insert(&mut self, v: &T, nbrs: &[T], state: &PartitionState<T>) {

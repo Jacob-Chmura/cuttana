@@ -7,16 +7,17 @@ use std::hash::Hash;
 
 pub fn partition<T>(
     stream: VertexStream<T>,
-    num_partitions: usize,
-    max_partition_size: usize,
-    max_buffer_size: usize,
-    buffer_degree_threshold: usize,
+    num_partitions: u8,
+    max_partition_size: u32,
+    max_buffer_size: u64,
+    buffer_degree_threshold: u32,
 ) -> PartitionResult<T>
 where
     T: Eq + Hash + Clone + Ord,
 {
     assert!(num_partitions > 0, "Number of partitions must be > 0");
     assert!(max_partition_size > 0, "Max partition size must be > 0");
+    // TODO: Note that we only support num_partitions * max_partition_size vertices.
 
     const THETA: f64 = 2.0;
     let buffer_scorer = CuttanaBufferScorer::new(THETA, buffer_degree_threshold as f64);
@@ -29,9 +30,9 @@ where
 
     for (v, nbrs) in stream {
         state.vertex_count += 1;
-        state.edge_count += nbrs.len();
+        state.edge_count += nbrs.len() as u64;
 
-        if nbrs.len() >= buffer_degree_threshold {
+        if nbrs.len() as u32 >= buffer_degree_threshold {
             partition_vertex(&v, &nbrs, &mut state, &mut buffer, &mut scorer);
         } else {
             buffer.insert(&v, &nbrs, &state);

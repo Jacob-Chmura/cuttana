@@ -6,10 +6,10 @@ use cuttana::stream::VertexStream;
 fn test_cuttana() {
     let data = vec![(0, vec![1, 2]), (1, vec![0]), (2, vec![0])];
     let stream = VertexStream::from_adjacency_list(data);
-    const NUM_PARTITIONS: usize = 16;
-    const MAX_PARTITION_SIZE: usize = 1024;
-    const MAX_BUFFER_SIZE: usize = 1_000_000;
-    const DEGREE_MAX: usize = 1000;
+    const NUM_PARTITIONS: u8 = 16;
+    const MAX_PARTITION_SIZE: u32 = 1024;
+    const MAX_BUFFER_SIZE: u64 = 1_000_000;
+    const DEGREE_MAX: u32 = 1000;
 
     let result: PartitionResult<i32> = partition(
         stream,

@@ -3,12 +3,12 @@ use std::collections::HashMap;
 
 /// Final output of the partitioning algorithm.
 pub struct PartitionResult<T> {
-    pub assignments: HashMap<T, usize>,
-    pub num_partitions: usize,
-    pub vertex_count: usize,
-    pub edge_count: usize,
+    pub assignments: HashMap<T, u8>,
+    pub num_partitions: u8,
+    pub vertex_count: u64,
+    pub edge_count: u64,
 
-    cut_count: usize,
+    cut_count: u64,
 }
 
 impl<T> PartitionResult<T> {
@@ -17,7 +17,7 @@ impl<T> PartitionResult<T> {
     }
 
     pub fn communication_volume_cost(&self) -> f64 {
-        self.cut_count as f64 / (self.num_partitions * self.vertex_count) as f64
+        self.cut_count as f64 / (self.num_partitions as u64 * self.vertex_count) as f64
     }
 
     pub(crate) fn from_state(state: PartitionState<T>) -> Self {
