@@ -1,6 +1,6 @@
 use cuttana::cuttana_partition;
+use cuttana::result::PartitionResult;
 use cuttana::stream::AdjacencyList;
-use std::collections::HashMap;
 
 #[test]
 fn test_cuttana() {
@@ -11,11 +11,15 @@ fn test_cuttana() {
     const MAX_BUFFER_SIZE: usize = 1_000_000;
     const DEGREE_MAX: usize = 1000;
 
-    let _p: HashMap<i32, usize> = cuttana_partition(
+    let result: PartitionResult<i32> = cuttana_partition(
         stream,
         NUM_PARTITIONS,
         MAX_PARTITION_SIZE,
         MAX_BUFFER_SIZE,
         DEGREE_MAX,
     );
+
+    assert_eq!(result.num_partitions, NUM_PARTITIONS);
+    assert_eq!(result.vertex_count, 3);
+    assert_eq!(result.edge_count, 4);
 }

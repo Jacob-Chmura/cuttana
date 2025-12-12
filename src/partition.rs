@@ -1,55 +1,9 @@
 use crate::buffer::{BufferManager, BufferScorer, CuttanaBufferScorer};
+use crate::result::PartitionResult;
 use crate::scorer::{CuttanaPartitionScorer, PartitionScorer};
+use crate::state::PartitionState;
 use crate::stream::VertexStream;
-use std::collections::HashMap;
 use std::hash::Hash;
-
-/// Tracks vertex-based partion assignment output from a graph partioner
-pub struct PartitionState<T> {
-    assignments: HashMap<T, usize>,
-    partition_sizes: Vec<usize>,
-    max_partition_size: usize,
-    pub num_partitions: usize,
-}
-
-impl<T> PartitionState<T> {
-    pub fn new(num_partitions: usize, max_partition_size: usize) -> Self {
-        Self {
-            assignments: HashMap::new(),
-            partition_sizes: vec![0; num_partitions],
-            max_partition_size,
-            num_partitions,
-        }
-    }
-
-    pub fn assign(&mut self, v: T, partition: usize)
-    where
-        T: Eq + Hash,
-    {
-        self.assignments.insert(v, partition);
-        self.partition_sizes[partition] += 1;
-    }
-
-    pub fn get_partition_of(&self, v: &T) -> Option<usize>
-    where
-        T: Eq + Hash,
-    {
-        self.assignments.get(v).copied()
-    }
-
-    pub fn smallest_partition(&self) -> usize {
-        self.partition_sizes
-            .iter()
-            .enumerate()
-            .min_by_key(|&(_, sz)| sz)
-            .unwrap()
-            .0
-    }
-
-    pub fn has_room_in_partition(&self, partition: usize) -> bool {
-        partition < self.num_partitions && self.partition_sizes[partition] < self.max_partition_size
-    }
-}
 
 pub fn cuttana_partition<T>(
     mut stream: impl VertexStream<VertexID = T>,
@@ -57,7 +11,7 @@ pub fn cuttana_partition<T>(
     max_partition_size: usize,
     max_buffer_size: usize,
     buffer_degree_threshold: usize,
-) -> HashMap<T, usize>
+) -> PartitionResult<T>
 where
     T: Eq + Hash + Clone + Ord,
 {
@@ -74,6 +28,9 @@ where
     let mut state = PartitionState::<T>::new(num_partitions, max_partition_size);
 
     while let Some((v, nbrs)) = stream.next_entry() {
+        state.vertex_count += 1;
+        state.edge_count += nbrs.len();
+
         if nbrs.len() >= buffer_degree_threshold {
             partition_vertex(&v, &nbrs, &mut state, &mut buffer, &mut scorer);
         } else {
@@ -91,7 +48,7 @@ where
         partition_vertex(&v, &nbrs, &mut state, &mut buffer, &mut scorer);
     }
 
-    state.assignments
+    PartitionResult::from_state(state)
 }
 
 fn partition_vertex<T, B: PartitionScorer, S: BufferScorer>(
@@ -108,5 +65,10 @@ fn partition_vertex<T, B: PartitionScorer, S: BufferScorer>(
 
     for nbr in nbrs {
         buffer.update_score(nbr);
+        if let Some(nbr_partition) = state.get_partition_of(nbr)
+            && nbr_partition != best_partition
+        {
+            state.cut_count += 1;
+        }
     }
 }

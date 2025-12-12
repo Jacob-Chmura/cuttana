@@ -1,4 +1,4 @@
-use crate::partition::PartitionState;
+use crate::state::PartitionState;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::hash::Hash;
@@ -113,11 +113,11 @@ impl<T: Ord> Ord for BufferKey<T> {
     }
 }
 
-pub trait BufferScorer {
+pub(crate) trait BufferScorer {
     fn score<T: Eq + Hash + Clone>(&self, v: &T, nbrs: &[T], state: &PartitionState<T>) -> f64;
 }
 
-pub struct CuttanaBufferScorer {
+pub(crate) struct CuttanaBufferScorer {
     theta: f64,
     buffer_deg_threshold: f64,
 }
