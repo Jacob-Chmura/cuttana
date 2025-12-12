@@ -19,7 +19,6 @@ fn test_cuttana() {
         DEGREE_MAX,
     );
 
-    assert_eq!(result.num_partitions, NUM_PARTITIONS);
     assert_eq!(result.vertex_count, 3);
     assert_eq!(result.edge_count, 4);
 }

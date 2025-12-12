@@ -20,10 +20,10 @@ fn main() -> std::io::Result<()> {
 
     println!("Vertices: {}", result.vertex_count);
     println!("Edges: {}", result.edge_count);
-    println!("Edge cut ratio: {:.3}", result.edge_cut_cost());
+    println!("Edge cut ratio: {:.3}", result.edge_cut_cost);
     println!(
         "Communication volume: {:.3}",
-        result.communication_volume_cost()
+        result.communication_volume_cost
     );
 
     Ok(())

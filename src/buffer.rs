@@ -158,6 +158,6 @@ impl BufferScorer for CuttanaBufferScorer {
         nbrs: &[T],
         _state: &PartitionState<T>,
     ) -> f64 {
-        old_score + 2.0 / nbrs.len() as f64
+        old_score + self.theta / nbrs.len() as f64
     }
 }
