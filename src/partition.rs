@@ -17,7 +17,6 @@ where
 {
     assert!(num_partitions > 0, "Number of partitions must be > 0");
     assert!(max_partition_size > 0, "Max partition size must be > 0");
-    // TODO: Note that we only support num_partitions * max_partition_size vertices.
 
     const THETA: f64 = 2.0;
     let buffer_scorer = CuttanaBufferScorer::new(THETA, buffer_degree_threshold as f64);
@@ -61,11 +60,15 @@ fn partition_vertex<T, B: PartitionScorer, S: BufferScorer>(
 ) where
     T: Eq + Hash + Clone + Ord,
 {
+    if !state.has_room_in_partition(state.smallest_partition()) {
+        panic!("Partition capacity exceeded. Increase max_partition_size or num_partitions.");
+    }
+
     let best_partition = scorer.find_best_partition(v, nbrs, state);
     state.assign(v.clone(), best_partition);
 
     for nbr in nbrs {
-        buffer.update_score(nbr);
+        buffer.update_score(nbr, state);
         if let Some(nbr_partition) = state.get_partition_of(nbr)
             && nbr_partition != best_partition
         {

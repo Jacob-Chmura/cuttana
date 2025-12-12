@@ -5,8 +5,8 @@ fn main() -> std::io::Result<()> {
     let path = "./examples/emailEnron.txt";
     let stream = VertexStream::<i32>::from_csv(path, Delimiter::Space)?;
 
-    let num_partitions = 4;
-    let max_partition_size = 1000;
+    let num_partitions = 16;
+    let max_partition_size = 10000;
     let max_buffer_size = 100;
     let buffer_degree_threshold = 10;
 

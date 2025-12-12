@@ -60,7 +60,7 @@ where
         None
     }
 
-    pub fn update_score(&mut self, v: &T) {
+    pub fn update_score(&mut self, v: &T, state: &PartitionState<T>) {
         let old_score = match self.map.get(v).copied() {
             Some(s) => s,
             None => return,
@@ -72,8 +72,7 @@ where
         };
         let nbrs = self.tree.remove(&key).unwrap();
 
-        // TODO: Make generic
-        let new_score = old_score + 2.0 / nbrs.len() as f64;
+        let new_score = self.scorer.update_score(old_score, v, &nbrs, state);
         let new_key = BufferKey {
             score: new_score,
             vertex: v.clone(),
@@ -115,6 +114,16 @@ impl<T: Ord> Ord for BufferKey<T> {
 
 pub(crate) trait BufferScorer {
     fn score<T: Eq + Hash + Clone>(&self, v: &T, nbrs: &[T], state: &PartitionState<T>) -> f64;
+
+    fn update_score<T: Eq + Hash + Clone>(
+        &self,
+        _old_score: f64,
+        v: &T,
+        nbrs: &[T],
+        state: &PartitionState<T>,
+    ) -> f64 {
+        self.score(v, nbrs, state)
+    }
 }
 
 pub(crate) struct CuttanaBufferScorer {
@@ -140,5 +149,15 @@ impl BufferScorer for CuttanaBufferScorer {
             .count() as f64;
 
         self.theta * (num_nbrs_partitioned / degree) + (degree / self.buffer_deg_threshold)
+    }
+
+    fn update_score<T: Eq + Hash + Clone>(
+        &self,
+        old_score: f64,
+        _v: &T,
+        nbrs: &[T],
+        _state: &PartitionState<T>,
+    ) -> f64 {
+        old_score + 2.0 / nbrs.len() as f64
     }
 }
