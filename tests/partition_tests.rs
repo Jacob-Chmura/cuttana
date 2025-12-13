@@ -1,3 +1,4 @@
+use cuttana::config::CuttanaConfig;
 use cuttana::partition;
 use cuttana::result::PartitionResult;
 use cuttana::stream::VertexStream;
@@ -8,16 +9,10 @@ fn test_cuttana() {
     let stream = VertexStream::from_adjacency_list(data);
     const NUM_PARTITIONS: u8 = 16;
     const MAX_PARTITION_SIZE: u32 = 1024;
-    const MAX_BUFFER_SIZE: u64 = 1_000_000;
-    const DEGREE_MAX: u32 = 1000;
+    let config = CuttanaConfig::default();
 
-    let result: PartitionResult<i32> = partition(
-        stream,
-        NUM_PARTITIONS,
-        MAX_PARTITION_SIZE,
-        MAX_BUFFER_SIZE,
-        DEGREE_MAX,
-    );
+    let result: PartitionResult<i32> =
+        partition(stream, NUM_PARTITIONS, MAX_PARTITION_SIZE, config);
 
     assert_eq!(result.vertex_count, 3);
     assert_eq!(result.edge_count, 4);

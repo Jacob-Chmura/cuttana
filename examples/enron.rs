@@ -1,3 +1,4 @@
+use cuttana::config::CuttanaConfig;
 use cuttana::partition;
 use cuttana::stream::{Delimiter, VertexStream};
 
@@ -7,16 +8,8 @@ fn main() -> std::io::Result<()> {
 
     let num_partitions = 16;
     let max_partition_size = 10000;
-    let max_buffer_size = 100;
-    let buffer_degree_threshold = 10;
-
-    let result = partition(
-        stream,
-        num_partitions,
-        max_partition_size,
-        max_buffer_size,
-        buffer_degree_threshold,
-    );
+    let config = CuttanaConfig::default();
+    let result = partition(stream, num_partitions, max_partition_size, config);
 
     println!("Vertices: {}", result.vertex_count);
     println!("Edges: {}", result.edge_count);

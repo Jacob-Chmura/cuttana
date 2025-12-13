@@ -1,4 +1,5 @@
 use crate::buffer::{BufferManager, BufferScorer, CuttanaBufferScorer};
+use crate::config::CuttanaConfig;
 use crate::result::PartitionResult;
 use crate::scorer::{CuttanaPartitionScorer, PartitionScorer};
 use crate::state::PartitionState;
@@ -9,8 +10,7 @@ pub fn partition<T>(
     stream: VertexStream<T>,
     num_partitions: u8,
     max_partition_size: u32,
-    max_buffer_size: u64,
-    buffer_degree_threshold: u32,
+    config: CuttanaConfig,
 ) -> PartitionResult<T>
 where
     T: Eq + Hash + Clone + Ord,
@@ -18,20 +18,19 @@ where
     assert!(num_partitions > 0, "Number of partitions must be > 0");
     assert!(max_partition_size > 0, "Max partition size must be > 0");
 
-    const THETA: f64 = 2.0;
-    let buffer_scorer = CuttanaBufferScorer::new(THETA, buffer_degree_threshold as f64);
+    let buffer_scorer =
+        CuttanaBufferScorer::new(config.theta, config.buffer_degree_threshold as f64);
+    let mut buffer =
+        BufferManager::<T, CuttanaBufferScorer>::new(config.max_buffer_size, buffer_scorer);
 
-    const GAMMA: f64 = 1.5;
-    let mut scorer = CuttanaPartitionScorer::new(GAMMA);
-
-    let mut buffer = BufferManager::<T, CuttanaBufferScorer>::new(max_buffer_size, buffer_scorer);
+    let mut scorer = CuttanaPartitionScorer::new(config.gamma);
     let mut state = PartitionState::<T>::new(num_partitions, max_partition_size);
 
     for (v, nbrs) in stream {
         state.vertex_count += 1;
         state.edge_count += nbrs.len() as u64;
 
-        if nbrs.len() as u32 >= buffer_degree_threshold {
+        if nbrs.len() as u32 >= config.buffer_degree_threshold {
             partition_vertex(&v, &nbrs, &mut state, &mut buffer, &mut scorer);
         } else {
             buffer.insert(&v, &nbrs, &state);
