@@ -86,7 +86,6 @@ where
 pub(crate) struct CuttanaState<T> {
     pub global: PartitionCore<T, u8>,
     pub global_to_sub: HashMap<u8, PartitionCore<T, u16>>,
-    pub sub_to_global: HashMap<u16, u8>,
     pub sub_partition_graph: HashMap<(u16, u16), u64>,
 }
 
@@ -95,11 +94,27 @@ where
     T: Eq + Hash,
 {
     pub fn new(num_partitions: u8, max_partition_size: u32, config: &CuttanaConfig) -> Self {
+        let global = PartitionCore::new(num_partitions, max_partition_size);
+
+        // Pre-create sub-partitions for each global partition
+        let mut global_to_sub = HashMap::new();
+        for g in 0..num_partitions {
+            global_to_sub.insert(
+                g,
+                PartitionCore::new(config.num_sub_partitions, config.max_sub_partition_size),
+            );
+        }
+
         Self {
-            global: PartitionCore::new(num_partitions, max_partition_size),
-            global_to_sub: HashMap::new(),
-            sub_to_global: HashMap::new(),
+            global,
+            global_to_sub,
             sub_partition_graph: HashMap::new(),
         }
+    }
+
+    pub fn sub_partition(&mut self, global_partition: u8) -> &mut PartitionCore<T, u16> {
+        self.global_to_sub
+            .get_mut(&global_partition)
+            .expect("Global partition does not exist")
     }
 }

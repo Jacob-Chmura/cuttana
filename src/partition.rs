@@ -2,7 +2,7 @@ use crate::buffer::{BufferManager, BufferScorer, CuttanaBufferScorer};
 use crate::config::CuttanaConfig;
 use crate::result::PartitionResult;
 use crate::scorer::{CuttanaPartitionScorer, PartitionScorer};
-use crate::state::CuttanaState;
+use crate::state::{CuttanaState, PartitionCore};
 use crate::stream::VertexStream;
 use std::hash::Hash;
 
@@ -77,15 +77,14 @@ fn partition_vertex<T, B: PartitionScorer, S: BufferScorer>(
         }
     }
 
-    // TODO
-    let best_sub_partition: u16 = 0; // call scorer on sub part
-    // state.assign_sub_partition(v.clone(), best_sub_partition)
-    // The sub partitoin scoreer is exactly the same, except
-    // it has a different gamma, state API must point to sub-graph state
-    // e.g. num_partition s= sub_graph _partitions, and sub graph capacity constraint
+    // TODO: Get sub scorer
+    let best_sub_partition: u16 = 0;
+    state
+        .sub_partition(best_partition)
+        .assign_partition(v.clone(), best_sub_partition);
 
     for nbr in nbrs {
-        if let Some(nbr_sub_partition) = None
+        if let Some(nbr_sub_partition) = state.sub_partition(best_partition).partition_of(nbr)
             && nbr_sub_partition != best_sub_partition
         {
             *state
