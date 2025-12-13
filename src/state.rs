@@ -10,6 +10,10 @@ pub(crate) struct PartitionState<T> {
     pub vertex_count: u64,
     pub edge_count: u64,
     pub cut_count: u64,
+
+    pub sub_to_partition: HashMap<u16, u8>,
+    pub sub_assignments: HashMap<T, u16>,
+    pub sub_partition_graph: HashMap<(u16, u16), u64>,
 }
 
 impl<T> PartitionState<T> {
@@ -22,6 +26,9 @@ impl<T> PartitionState<T> {
             vertex_count: 0,
             edge_count: 0,
             cut_count: 0,
+            sub_to_partition: HashMap::new(),
+            sub_assignments: HashMap::new(),
+            sub_partition_graph: HashMap::new(),
         }
     }
 

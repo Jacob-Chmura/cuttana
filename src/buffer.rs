@@ -132,10 +132,10 @@ pub(crate) struct CuttanaBufferScorer {
 }
 
 impl CuttanaBufferScorer {
-    pub fn new(theta: f64, buffer_deg_threshold: f64) -> Self {
+    pub fn new(theta: f64, buffer_deg_threshold: u32) -> Self {
         Self {
             theta,
-            buffer_deg_threshold,
+            buffer_deg_threshold: buffer_deg_threshold as f64,
         }
     }
 }

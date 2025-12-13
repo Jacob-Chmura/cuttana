@@ -18,10 +18,10 @@ where
     assert!(num_partitions > 0, "Number of partitions must be > 0");
     assert!(max_partition_size > 0, "Max partition size must be > 0");
 
-    let buffer_scorer =
-        CuttanaBufferScorer::new(config.theta, config.buffer_degree_threshold as f64);
-    let mut buffer =
-        BufferManager::<T, CuttanaBufferScorer>::new(config.max_buffer_size, buffer_scorer);
+    let mut buffer = BufferManager::new(
+        config.max_buffer_size,
+        CuttanaBufferScorer::new(config.theta, config.buffer_degree_threshold),
+    );
 
     let mut scorer = CuttanaPartitionScorer::new(config.gamma);
     let mut state = PartitionState::<T>::new(num_partitions, max_partition_size);
@@ -72,6 +72,28 @@ fn partition_vertex<T, B: PartitionScorer, S: BufferScorer>(
             && nbr_partition != best_partition
         {
             state.cut_count += 1;
+        }
+    }
+
+    // TODO
+    let best_sub_partition: u16 = 0; // call scorer on sub part
+    // state.assign_sub_partition(v.clone(), best_sub_partition)
+    // The sub partitoin scoreer is exactly the same, except
+    // it has a different gamma, state API must point to sub-graph state
+    // e.g. num_partition s= sub_graph _partitions, and sub graph capacity constraint
+
+    for nbr in nbrs {
+        if let Some(nbr_sub_partition) = None
+            && nbr_sub_partition != best_sub_partition
+        {
+            *state
+                .sub_partition_graph
+                .entry((best_sub_partition, nbr_sub_partition))
+                .or_insert(0) += 1;
+            *state
+                .sub_partition_graph
+                .entry((nbr_sub_partition, best_sub_partition))
+                .or_insert(0) += 1;
         }
     }
 }
