@@ -2,7 +2,7 @@ use crate::buffer::{BufferManager, BufferScorer, CuttanaBufferScorer};
 use crate::config::CuttanaConfig;
 use crate::result::PartitionResult;
 use crate::scorer::{CuttanaPartitionScorer, PartitionScorer};
-use crate::state::PartitionState;
+use crate::state::CuttanaState;
 use crate::stream::VertexStream;
 use std::hash::Hash;
 
@@ -24,11 +24,12 @@ where
     );
 
     let mut scorer = CuttanaPartitionScorer::new(config.gamma);
-    let mut state = PartitionState::<T>::new(num_partitions, max_partition_size);
+    let mut state = CuttanaState::<T>::new(num_partitions, max_partition_size, &config);
 
     for (v, nbrs) in stream {
-        state.vertex_count += 1;
-        state.edge_count += nbrs.len() as u64;
+        // TODO: Organize
+        state.metrics.vertex_count += 1;
+        state.metrics.edge_count += nbrs.len() as u64;
 
         if nbrs.len() as u32 >= config.buffer_degree_threshold {
             partition_vertex(&v, &nbrs, &mut state, &mut buffer, &mut scorer);
@@ -53,25 +54,26 @@ where
 fn partition_vertex<T, B: PartitionScorer, S: BufferScorer>(
     v: &T,
     nbrs: &Vec<T>,
-    state: &mut PartitionState<T>,
+    state: &mut CuttanaState<T>,
     buffer: &mut BufferManager<T, S>,
     scorer: &mut B,
 ) where
     T: Eq + Hash + Clone + Ord,
 {
-    if !state.has_room_in_partition(state.smallest_partition()) {
+    if !state.global.has_room() {
+        // TODO: Return result and graceful handle
         panic!("Partition capacity exceeded. Increase max_partition_size or num_partitions.");
     }
 
     let best_partition = scorer.find_best_partition(v, nbrs, state);
-    state.assign(v.clone(), best_partition);
+    state.global.assign_partition(v.clone(), best_partition);
 
     for nbr in nbrs {
         buffer.update_score(nbr, state);
-        if let Some(nbr_partition) = state.get_partition_of(nbr)
+        if let Some(nbr_partition) = state.global.partition_of(nbr)
             && nbr_partition != best_partition
         {
-            state.cut_count += 1;
+            state.metrics.cut_count += 1;
         }
     }
 
