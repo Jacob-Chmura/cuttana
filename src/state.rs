@@ -2,12 +2,37 @@ use crate::config::CuttanaConfig;
 use std::collections::HashMap;
 use std::hash::Hash;
 
+/// Partition quality metrics collected during partitioning
+#[derive(Default, Debug, Clone)]
+pub(crate) struct PartitionMetrics {
+    pub vertex_count: u64,
+    pub edge_count: u64,
+    pub cut_count: u64,
+}
+
+impl PartitionMetrics {
+    pub fn edge_cut_ratio(&self) -> f64 {
+        if self.edge_count == 0 {
+            return 0.0;
+        }
+        self.cut_count as f64 / self.edge_count as f64
+    }
+
+    pub fn communication_volume(&self, num_partitions: u64) -> f64 {
+        if num_partitions == 0 || self.vertex_count == 0 {
+            return 0.0;
+        }
+        self.cut_count as f64 / (num_partitions * self.vertex_count) as f64
+    }
+}
+
 /// Tracks vertex-based partition assignment output from a graph partioner
 pub(crate) struct PartitionCore<T, P> {
     pub assignments: HashMap<T, P>, // vertex -> partition id
     pub partition_sizes: Vec<u32>,
     pub num_partitions: P,
     pub max_partition_size: u32,
+    pub metrics: PartitionMetrics,
 }
 
 impl<T, P> PartitionCore<T, P>
@@ -21,6 +46,7 @@ where
             partition_sizes: vec![0; num_partitions.into()],
             num_partitions,
             max_partition_size,
+            metrics: PartitionMetrics::default(),
         }
     }
 
@@ -56,36 +82,10 @@ where
     }
 }
 
-/// Global partition quality metrics collected during partitioning
-#[derive(Default, Debug, Clone)]
-pub(crate) struct PartitionMetrics {
-    pub vertex_count: u64,
-    pub edge_count: u64,
-    pub cut_count: u64,
-}
-
-impl PartitionMetrics {
-    pub fn edge_cut_ratio(&self) -> f64 {
-        if self.edge_count == 0 {
-            return 0.0;
-        }
-        self.cut_count as f64 / self.edge_count as f64
-    }
-
-    pub fn communication_volume(&self, num_partitions: u64) -> f64 {
-        if num_partitions == 0 || self.vertex_count == 0 {
-            return 0.0;
-        }
-        self.cut_count as f64 / (num_partitions * self.vertex_count) as f64
-    }
-}
-
 /// Cuttana Partioning State
 pub(crate) struct CuttanaState<T> {
     pub global: PartitionCore<T, u8>,
-    pub local: PartitionCore<T, u16>,
-    pub metrics: PartitionMetrics,
-
+    pub global_to_sub: HashMap<u8, PartitionCore<T, u16>>,
     pub sub_to_global: HashMap<u16, u8>,
     pub sub_partition_graph: HashMap<(u16, u16), u64>,
 }
@@ -97,8 +97,7 @@ where
     pub fn new(num_partitions: u8, max_partition_size: u32, config: &CuttanaConfig) -> Self {
         Self {
             global: PartitionCore::new(num_partitions, max_partition_size),
-            local: PartitionCore::new(config.num_sub_partitions, config.max_sub_partition_size),
-            metrics: PartitionMetrics::default(),
+            global_to_sub: HashMap::new(),
             sub_to_global: HashMap::new(),
             sub_partition_graph: HashMap::new(),
         }

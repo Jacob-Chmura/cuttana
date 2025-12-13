@@ -29,8 +29,14 @@ impl CuttanaPartitionScorer {
         // TODO: Need a seperate local/global scorer to derive e.g. num partitions
         // using global for now
         let num_partitions = state.global.num_partitions as f64;
-        let alpha = num_partitions.powf(self.gamma - 1.0) * (state.metrics.edge_count as f64)
-            / (state.metrics.vertex_count as f64).powf(self.gamma);
+
+        // TODO: in parent, alpha should be really based on global edge/vertex count
+        // in local, it should be approximated based on edge/vertex count in sub partition
+        let alpha = num_partitions.powf(self.gamma - 1.0)
+            * (state.global.metrics.edge_count as f64)
+            / (state.global.metrics.vertex_count as f64).powf(self.gamma);
+        // TODO: in global, num_partitions should be partition_cap[partition]
+        // in local num parittions should be sub_partition_cap[parent_partition][sub_partition]
         alpha * self.gamma * num_partitions.powf(self.gamma - 1.0)
     }
 }

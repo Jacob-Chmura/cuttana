@@ -16,10 +16,11 @@ impl<T> PartitionResult<T> {
         Self {
             assignments: state.global.assignments,
             partition_sizes: state.global.partition_sizes,
-            vertex_count: state.metrics.vertex_count,
-            edge_count: state.metrics.edge_count,
-            edge_cut_ratio: state.metrics.edge_cut_ratio(),
+            vertex_count: state.global.metrics.vertex_count,
+            edge_count: state.global.metrics.edge_count,
+            edge_cut_ratio: state.global.metrics.edge_cut_ratio(),
             communication_volume: state
+                .global
                 .metrics
                 .communication_volume(state.global.num_partitions as u64),
         }

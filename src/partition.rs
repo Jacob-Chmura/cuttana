@@ -28,8 +28,8 @@ where
 
     for (v, nbrs) in stream {
         // TODO: Organize
-        state.metrics.vertex_count += 1;
-        state.metrics.edge_count += nbrs.len() as u64;
+        state.global.metrics.vertex_count += 1;
+        state.global.metrics.edge_count += nbrs.len() as u64;
 
         if nbrs.len() as u32 >= config.buffer_degree_threshold {
             partition_vertex(&v, &nbrs, &mut state, &mut buffer, &mut scorer);
@@ -73,7 +73,7 @@ fn partition_vertex<T, B: PartitionScorer, S: BufferScorer>(
         if let Some(nbr_partition) = state.global.partition_of(nbr)
             && nbr_partition != best_partition
         {
-            state.metrics.cut_count += 1;
+            state.global.metrics.cut_count += 1;
         }
     }
 
