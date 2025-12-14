@@ -2,7 +2,7 @@ use crate::buffer::{BufferManager, BufferScorer, CuttanaBufferScorer};
 use crate::config::CuttanaConfig;
 use crate::result::PartitionResult;
 use crate::scorer::{CuttanaPartitionScorer, PartitionScorer};
-use crate::state::{CuttanaState, PartitionCore};
+use crate::state::CuttanaState;
 use crate::stream::VertexStream;
 use std::hash::Hash;
 
