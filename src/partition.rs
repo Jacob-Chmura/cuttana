@@ -24,6 +24,7 @@ where
     );
 
     let mut scorer = CuttanaPartitionScorer::new(config.gamma);
+    let mut sub_scorer = CuttanaPartitionScorer::new(config.sub_gamma);
     let mut state = CuttanaState::<T>::new(num_partitions, max_partition_size, &config);
 
     for (v, nbrs) in stream {
@@ -32,7 +33,14 @@ where
         state.global.metrics.edge_count += nbrs.len() as u64;
 
         if nbrs.len() as u32 >= config.buffer_degree_threshold {
-            partition_vertex(&v, &nbrs, &mut state, &mut buffer, &mut scorer);
+            partition_vertex(
+                &v,
+                &nbrs,
+                &mut state,
+                &mut buffer,
+                &mut scorer,
+                &mut sub_scorer,
+            );
         } else {
             buffer.insert(&v, &nbrs, &state);
         }
@@ -40,12 +48,26 @@ where
         if buffer.is_at_capacity()
             && let Some((v, nbrs)) = buffer.evict()
         {
-            partition_vertex(&v, &nbrs, &mut state, &mut buffer, &mut scorer);
+            partition_vertex(
+                &v,
+                &nbrs,
+                &mut state,
+                &mut buffer,
+                &mut scorer,
+                &mut sub_scorer,
+            );
         }
     }
 
     while let Some((v, nbrs)) = buffer.evict() {
-        partition_vertex(&v, &nbrs, &mut state, &mut buffer, &mut scorer);
+        partition_vertex(
+            &v,
+            &nbrs,
+            &mut state,
+            &mut buffer,
+            &mut scorer,
+            &mut sub_scorer,
+        );
     }
 
     PartitionResult::from_state(state)
@@ -57,6 +79,7 @@ fn partition_vertex<T, B: PartitionScorer, S: BufferScorer>(
     state: &mut CuttanaState<T>,
     buffer: &mut BufferManager<T, S>,
     scorer: &mut B,
+    _sub_scorer: &mut B,
 ) where
     T: Eq + Hash + Clone + Ord,
 {

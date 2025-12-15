@@ -25,19 +25,18 @@ impl CuttanaPartitionScorer {
         }
     }
 
-    fn compute_score<T>(&self, state: &CuttanaState<T>, _partition: u8) -> f64 {
-        // TODO: Need a seperate local/global scorer to derive e.g. num partitions
-        // using global for now
+    fn compute_score<T>(&self, state: &CuttanaState<T>, partition: u8) -> f64 {
+        // TODO: Local needs to do state[parent].partition_sizes[child]
+        let partition_size = state.global.partition_sizes[partition as usize] as f64;
+
+        // TODO: Local needs state.local[parent].num_partitions
         let num_partitions = state.global.num_partitions as f64;
 
-        // TODO: in parent, alpha should be really based on global edge/vertex count
-        // in local, it should be approximated based on edge/vertex count in sub partition
+        // TODO: Local must normalize vertex/edge by number of global partitions
         let alpha = num_partitions.powf(self.gamma - 1.0)
             * (state.global.metrics.edge_count as f64)
             / (state.global.metrics.vertex_count as f64).powf(self.gamma);
-        // TODO: in global, num_partitions should be partition_cap[partition]
-        // in local num parittions should be sub_partition_cap[parent_partition][sub_partition]
-        alpha * self.gamma * num_partitions.powf(self.gamma - 1.0)
+        alpha * self.gamma * partition_size.powf(self.gamma - 1.0)
     }
 }
 
