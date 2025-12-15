@@ -26,9 +26,7 @@ where
     let mut state = CuttanaState::<T>::new(num_partitions, &config);
 
     for (v, nbrs) in stream {
-        // TODO: Organize
-        state.global.metrics.vertex_count += 1;
-        state.global.metrics.edge_count += nbrs.len() as u64;
+        state.update_metrics(&v, &nbrs);
 
         if nbrs.len() as u32 >= config.buffer_degree_threshold {
             partition_vertex(
@@ -73,11 +71,11 @@ where
 
 fn partition_vertex<T, B: PartitionScorer, S: BufferScorer>(
     v: &T,
-    nbrs: &Vec<T>,
+    nbrs: &[T],
     state: &mut CuttanaState<T>,
     buffer: &mut BufferManager<T, S>,
     scorer: &mut B,
-    _sub_scorer: &mut B,
+    sub_scorer: &mut B,
 ) where
     T: Eq + Hash + Clone + Ord,
 {
@@ -86,7 +84,7 @@ fn partition_vertex<T, B: PartitionScorer, S: BufferScorer>(
         panic!("Partition capacity exceeded. Increase balance_slack or num_partitions.");
     }
 
-    let best_partition = scorer.find_best_partition(v, nbrs, state);
+    let best_partition = scorer.find_best_partition(v, nbrs, &state.global);
     state.global.assign_partition(v.clone(), best_partition);
 
     for nbr in nbrs {
@@ -99,7 +97,8 @@ fn partition_vertex<T, B: PartitionScorer, S: BufferScorer>(
     }
 
     // TODO: Get sub scorer
-    let best_sub_partition: u16 = 0;
+    let best_sub_partition: u16 =
+        sub_scorer.find_best_partition(v, nbrs, state.sub_partition(best_partition));
     state
         .sub_partition(best_partition)
         .assign_partition(v.clone(), best_sub_partition);
