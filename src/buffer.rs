@@ -1,4 +1,4 @@
-use crate::state::PartitionState;
+use crate::state::CuttanaState;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::hash::Hash;
@@ -33,7 +33,7 @@ where
         self.map.len() as u64 >= self.capacity
     }
 
-    pub fn insert(&mut self, v: &T, nbrs: &[T], state: &PartitionState<T>) {
+    pub fn insert(&mut self, v: &T, nbrs: &[T], state: &CuttanaState<T>) {
         let score = self.scorer.score(v, nbrs, state);
         let key = BufferKey {
             score,
@@ -60,7 +60,7 @@ where
         None
     }
 
-    pub fn update_score(&mut self, v: &T, state: &PartitionState<T>) {
+    pub fn update_score(&mut self, v: &T, state: &CuttanaState<T>) {
         let old_score = match self.map.get(v).copied() {
             Some(s) => s,
             None => return,
@@ -113,14 +113,14 @@ impl<T: Ord> Ord for BufferKey<T> {
 }
 
 pub(crate) trait BufferScorer {
-    fn score<T: Eq + Hash + Clone>(&self, v: &T, nbrs: &[T], state: &PartitionState<T>) -> f64;
+    fn score<T: Eq + Hash + Clone>(&self, v: &T, nbrs: &[T], state: &CuttanaState<T>) -> f64;
 
     fn update_score<T: Eq + Hash + Clone>(
         &self,
         _old_score: f64,
         v: &T,
         nbrs: &[T],
-        state: &PartitionState<T>,
+        state: &CuttanaState<T>,
     ) -> f64 {
         self.score(v, nbrs, state)
     }
@@ -132,20 +132,20 @@ pub(crate) struct CuttanaBufferScorer {
 }
 
 impl CuttanaBufferScorer {
-    pub fn new(theta: f64, buffer_deg_threshold: f64) -> Self {
+    pub fn new(theta: f64, buffer_deg_threshold: u32) -> Self {
         Self {
             theta,
-            buffer_deg_threshold,
+            buffer_deg_threshold: buffer_deg_threshold as f64,
         }
     }
 }
 
 impl BufferScorer for CuttanaBufferScorer {
-    fn score<T: Eq + Hash + Clone>(&self, _v: &T, nbrs: &[T], state: &PartitionState<T>) -> f64 {
+    fn score<T: Eq + Hash + Clone>(&self, _v: &T, nbrs: &[T], state: &CuttanaState<T>) -> f64 {
         let degree = nbrs.len() as f64;
         let num_nbrs_partitioned = nbrs
             .iter()
-            .filter(|nbr| state.get_partition_of(nbr).is_some())
+            .filter(|nbr| state.global.partition_of(nbr).is_some())
             .count() as f64;
 
         self.theta * (num_nbrs_partitioned / degree) + (degree / self.buffer_deg_threshold)
@@ -156,7 +156,7 @@ impl BufferScorer for CuttanaBufferScorer {
         old_score: f64,
         _v: &T,
         nbrs: &[T],
-        _state: &PartitionState<T>,
+        _state: &CuttanaState<T>,
     ) -> f64 {
         old_score + self.theta / nbrs.len() as f64
     }
