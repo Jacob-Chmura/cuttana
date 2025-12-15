@@ -127,4 +127,19 @@ where
             .get_mut(&global_partition)
             .expect("Global partition does not exist")
     }
+
+    pub fn update_metrics(&mut self, _v: &T, nbrs: &[T]) {
+        self.global.metrics.vertex_count += 1;
+        self.global.metrics.edge_count += nbrs.len() as u64;
+
+        let v_eff = (self.global.metrics.vertex_count as f64 / self.global.num_partitions as f64)
+            .round() as u64;
+        let e_eff = (self.global.metrics.edge_count as f64 / self.global.num_partitions as f64)
+            .round() as u64;
+
+        for p in 0..self.global.num_partitions {
+            self.sub_partition(p).metrics.vertex_count = v_eff;
+            self.sub_partition(p).metrics.edge_count = e_eff;
+        }
+    }
 }

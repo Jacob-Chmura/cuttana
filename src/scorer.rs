@@ -1,15 +1,15 @@
-use crate::state::CuttanaState;
+use crate::state::PartitionCore;
 use rand::Rng;
 use rand::rngs::ThreadRng;
 use std::hash::Hash;
 
 pub(crate) trait PartitionScorer {
-    fn find_best_partition<T: Eq + Hash + Clone>(
+    fn find_best_partition<T: Eq + Hash + Clone, P: Copy + Into<usize> + TryFrom<usize>>(
         &mut self,
         v: &T,
         nbrs: &[T],
-        state: &CuttanaState<T>,
-    ) -> u8;
+        core: &PartitionCore<T, P>,
+    ) -> P;
 }
 
 pub(crate) struct CuttanaPartitionScorer {
@@ -25,34 +25,35 @@ impl CuttanaPartitionScorer {
         }
     }
 
-    fn compute_score<T>(&self, state: &CuttanaState<T>, partition: u8) -> f64 {
-        // TODO: Local needs to do state[parent].partition_sizes[child]
-        let partition_size = state.global.partition_sizes[partition as usize] as f64;
+    fn compute_score<T, P: Copy + Into<usize>>(
+        &self,
+        core: &PartitionCore<T, P>,
+        partition: P,
+    ) -> f64 {
+        let partition_size = core.partition_sizes[partition.into()] as f64;
+        let num_partitions = core.num_partitions.into() as f64;
+        let vertex_count = core.metrics.vertex_count as f64;
+        let edge_count = core.metrics.edge_count as f64;
 
-        // TODO: Local needs state.local[parent].num_partitions
-        let num_partitions = state.global.num_partitions as f64;
-
-        // TODO: Local must normalize vertex/edge by number of global partitions
-        let alpha = num_partitions.powf(self.gamma - 1.0)
-            * (state.global.metrics.edge_count as f64)
-            / (state.global.metrics.vertex_count as f64).powf(self.gamma);
+        let alpha =
+            num_partitions.powf(self.gamma - 1.0) * vertex_count / edge_count.powf(self.gamma);
         alpha * self.gamma * partition_size.powf(self.gamma - 1.0)
     }
 }
 
 impl PartitionScorer for CuttanaPartitionScorer {
-    fn find_best_partition<T: Eq + Hash + Clone>(
+    fn find_best_partition<T: Eq + Hash + Clone, P: Copy + Into<usize> + TryFrom<usize>>(
         &mut self,
         _v: &T,
         nbrs: &[T],
-        state: &CuttanaState<T>,
-    ) -> u8 {
+        core: &PartitionCore<T, P>,
+    ) -> P {
         // First candidate is just smallest partition
-        let mut best_partition = state.global.smallest_partition();
-        let mut best_score = -self.compute_score(state, best_partition);
+        let mut best_partition = core.smallest_partition();
+        let mut best_score = -self.compute_score(core, best_partition);
         let mut tie_count = 1;
 
-        let mut update = |partition: u8, score: f64, rng: &mut ThreadRng| {
+        let mut update = |partition: P, score: f64, rng: &mut ThreadRng| {
             if score > best_score {
                 (best_score, best_partition, tie_count) = (score, partition, 1);
             } else if score == best_score {
@@ -63,14 +64,14 @@ impl PartitionScorer for CuttanaPartitionScorer {
             }
         };
 
-        let mut nbrs_per_partition = vec![0; state.global.num_partitions.into()];
+        let mut nbrs_per_partition = vec![0; core.num_partitions.into()];
         for nbr in nbrs {
-            if let Some(partition) = state.global.partition_of(nbr)
-                && state.global.has_room_in_partition(partition)
+            if let Some(partition) = core.partition_of(nbr)
+                && core.has_room_in_partition(partition)
             {
-                nbrs_per_partition[partition as usize] += 1;
-                let score = nbrs_per_partition[partition as usize] as f64
-                    - self.compute_score(state, partition);
+                nbrs_per_partition[partition.into()] += 1;
+                let score = nbrs_per_partition[partition.into()] as f64
+                    - self.compute_score(core, partition);
                 update(partition, score, &mut self.rng);
             }
         }
