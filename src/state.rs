@@ -31,7 +31,7 @@ pub(crate) struct PartitionCore<T, P> {
     pub assignments: HashMap<T, P>, // vertex -> partition id
     pub partition_sizes: Vec<u32>,
     pub num_partitions: P,
-    pub max_partition_size: u32,
+    pub balance_slack: f64,
     pub metrics: PartitionMetrics,
 }
 
@@ -40,12 +40,12 @@ where
     T: Eq + Hash,
     P: Copy + Into<usize> + TryFrom<usize>,
 {
-    pub fn new(num_partitions: P, max_partition_size: u32) -> Self {
+    pub fn new(num_partitions: P, balance_slack: f64) -> Self {
         Self {
             assignments: HashMap::new(),
             partition_sizes: vec![0; num_partitions.into()],
             num_partitions,
-            max_partition_size,
+            balance_slack,
             metrics: PartitionMetrics::default(),
         }
     }
@@ -61,13 +61,19 @@ where
     }
 
     pub fn has_room_in_partition(&self, p: P) -> bool {
-        self.partition_sizes[p.into()] < self.max_partition_size
+        let threshold = self.metrics.vertex_count as f64 / self.num_partitions.into() as f64;
+        (self.partition_sizes[p.into()] as f64) < (1.0 + self.balance_slack) * threshold
     }
 
     pub fn has_room(&self) -> bool {
-        self.partition_sizes
-            .iter()
-            .any(|&sz| sz < self.max_partition_size)
+        for i in 0..self.partition_sizes.len() {
+            if let Ok(p) = P::try_from(i)
+                && self.has_room_in_partition(p)
+            {
+                return true;
+            }
+        }
+        false
     }
 
     pub fn smallest_partition(&self) -> P {
@@ -93,15 +99,19 @@ impl<T> CuttanaState<T>
 where
     T: Eq + Hash,
 {
-    pub fn new(num_partitions: u8, max_partition_size: u32, config: &CuttanaConfig) -> Self {
-        let global = PartitionCore::new(num_partitions, max_partition_size);
+    pub fn new(num_partitions: u8, config: &CuttanaConfig) -> Self {
+        // Adding extra slack for `Phase 1` of the algorithm, letting `Phase 2` use the
+        // user-specified slack parameter. E.g. see:
+        // https://github.com/cuttana/cuttana-partitioner/blob/ed0c18251273a41792c1fc3e909d4ced44beaa27/partitioners/ogpart_single_thread.cpp#L167
+        let balance_slack = (config.balance_slack * 2.0).min(config.balance_slack + 0.5);
+        let global = PartitionCore::new(num_partitions, balance_slack);
 
         // Pre-create sub-partitions for each global partition
         let mut global_to_sub = HashMap::new();
         for g in 0..num_partitions {
             global_to_sub.insert(
                 g,
-                PartitionCore::new(config.num_sub_partitions, config.max_sub_partition_size),
+                PartitionCore::new(config.num_sub_partitions, balance_slack),
             );
         }
 
