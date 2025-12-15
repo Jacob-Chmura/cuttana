@@ -7,9 +7,8 @@ fn main() -> std::io::Result<()> {
     let stream = VertexStream::<i32>::from_csv(path, Delimiter::Space)?;
 
     let num_partitions = 16;
-    let max_partition_size = 10000;
     let config = CuttanaConfig::default();
-    let result = partition(stream, num_partitions, max_partition_size, config);
+    let result = partition(stream, num_partitions, config);
 
     println!("Vertices: {}", result.vertex_count);
     println!("Edges: {}", result.edge_count);

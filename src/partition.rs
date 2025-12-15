@@ -9,14 +9,12 @@ use std::hash::Hash;
 pub fn partition<T>(
     stream: VertexStream<T>,
     num_partitions: u8,
-    max_partition_size: u32,
     config: CuttanaConfig,
 ) -> PartitionResult<T>
 where
     T: Eq + Hash + Clone + Ord,
 {
     assert!(num_partitions > 0, "Number of partitions must be > 0");
-    assert!(max_partition_size > 0, "Max partition size must be > 0");
 
     let mut buffer = BufferManager::new(
         config.max_buffer_size,
@@ -25,7 +23,7 @@ where
 
     let mut scorer = CuttanaPartitionScorer::new(config.gamma);
     let mut sub_scorer = CuttanaPartitionScorer::new(config.sub_gamma);
-    let mut state = CuttanaState::<T>::new(num_partitions, max_partition_size, &config);
+    let mut state = CuttanaState::<T>::new(num_partitions, &config);
 
     for (v, nbrs) in stream {
         // TODO: Organize
@@ -85,7 +83,7 @@ fn partition_vertex<T, B: PartitionScorer, S: BufferScorer>(
 {
     if !state.global.has_room() {
         // TODO: Return result and graceful handle
-        panic!("Partition capacity exceeded. Increase max_partition_size or num_partitions.");
+        panic!("Partition capacity exceeded. Increase balance_slack or num_partitions.");
     }
 
     let best_partition = scorer.find_best_partition(v, nbrs, state);

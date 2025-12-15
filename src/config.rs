@@ -1,7 +1,7 @@
 #[derive(Clone, Debug)]
 pub struct CuttanaConfig {
     pub num_sub_partitions: u16,
-    pub max_sub_partition_size: u32,
+    pub balance_slack: f64,
     pub max_buffer_size: u64,
     pub buffer_degree_threshold: u32,
     pub gamma: f64,
@@ -9,17 +9,44 @@ pub struct CuttanaConfig {
     pub theta: f64,
 }
 
+impl CuttanaConfig {
+    pub fn new(
+        num_sub_partitions: u16,
+        balance_slack: f64,
+        max_buffer_size: u64,
+        buffer_degree_threshold: u32,
+        gamma: f64,
+        sub_gamma: f64,
+        theta: f64,
+    ) -> Result<Self, &'static str> {
+        if balance_slack < 0.0 {
+            return Err("balance_slack must be >= 0");
+        }
+
+        Ok(Self {
+            num_sub_partitions,
+            balance_slack,
+            max_buffer_size,
+            buffer_degree_threshold,
+            gamma,
+            sub_gamma,
+            theta,
+        })
+    }
+}
+
 impl Default for CuttanaConfig {
     fn default() -> Self {
         // TODO: organize
-        Self {
-            num_sub_partitions: 4096,
-            max_sub_partition_size: 1_000_000,
-            max_buffer_size: 1_000_000,
-            buffer_degree_threshold: 100,
-            gamma: 1.5,
-            sub_gamma: 1.0,
-            theta: 2.0,
-        }
+        Self::new(
+            4096,      // num_sub_partitions
+            0.05,      // balance_slack
+            1_000_000, // max_buffer_size
+            100,       // buffer_degree_threshold
+            1.5,       // gamma
+            1.0,       // sub_gamma
+            2.0,       // theta
+        )
+        .unwrap()
     }
 }
