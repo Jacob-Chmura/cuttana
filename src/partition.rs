@@ -67,16 +67,18 @@ where
         );
     }
 
+    state.update_sub_edge_cut_by_partition();
+
     let num_partitions = state.global.num_partitions as f64;
     let num_sub_partitions = state.sub_partition(0).num_partitions as f64;
     let num_vertices = state.global.metrics.vertex_count as f64;
     let max_parent = (num_vertices / num_partitions * (1.0 + config.balance_slack)) as u64 + 1;
     let max_sub = (num_sub_partitions / num_partitions * 1.5) as u64 + 1;
 
-    state.update_sub_edge_cut_by_partition();
     fix_balance(&mut state, max_parent, max_sub);
     run_refinement(&mut state, max_parent, max_sub, config.info_gain_threshold);
     fix_balance(&mut state, max_parent, max_sub);
+
     PartitionResult::from_state(state)
 }
 
@@ -117,17 +119,8 @@ fn partition_vertex<T, B: PartitionScorer, S: BufferScorer>(
         if let Some(nbr_sub_partition) = state.sub_partition(best_partition).partition_of(nbr)
             && nbr_sub_partition != best_sub_partition
         {
-            let src = (best_partition as u64 * state.sub_partition(0).num_partitions as u64)
-                + best_sub_partition as u64;
-            let dst = (best_partition as u64 * state.sub_partition(0).num_partitions as u64)
-                + nbr_sub_partition as u64;
-
-            *state.sub_partition_graph[src as usize]
-                .entry(dst as u16)
-                .or_insert(0) += 1;
-            *state.sub_partition_graph[dst as usize]
-                .entry(src as u16)
-                .or_insert(0) += 1;
+            state.sub_partitions[best_sub_partition as usize].add_edge(nbr_sub_partition);
+            state.sub_partitions[nbr_sub_partition as usize].add_edge(best_sub_partition);
         }
     }
 }
