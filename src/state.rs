@@ -92,7 +92,7 @@ where
 pub(crate) struct CuttanaState<T> {
     pub global: PartitionCore<T, u8>,
     pub global_to_sub: HashMap<u8, PartitionCore<T, u16>>,
-    pub sub_partition_graph: HashMap<(u16, u16), u64>,
+    pub sub_partition_graph: Vec<HashMap<u16, u64>>,
 }
 
 impl<T> CuttanaState<T>
@@ -118,7 +118,7 @@ where
         Self {
             global,
             global_to_sub,
-            sub_partition_graph: HashMap::new(),
+            sub_partition_graph: vec![HashMap::new(); config.num_sub_partitions.into()],
         }
     }
 

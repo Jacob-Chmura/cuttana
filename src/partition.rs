@@ -107,13 +107,11 @@ fn partition_vertex<T, B: PartitionScorer, S: BufferScorer>(
         if let Some(nbr_sub_partition) = state.sub_partition(best_partition).partition_of(nbr)
             && nbr_sub_partition != best_sub_partition
         {
-            *state
-                .sub_partition_graph
-                .entry((best_sub_partition, nbr_sub_partition))
+            *state.sub_partition_graph[best_sub_partition as usize]
+                .entry(nbr_sub_partition)
                 .or_insert(0) += 1;
-            *state
-                .sub_partition_graph
-                .entry((nbr_sub_partition, best_sub_partition))
+            *state.sub_partition_graph[nbr_sub_partition as usize]
+                .entry(best_sub_partition)
                 .or_insert(0) += 1;
         }
     }
