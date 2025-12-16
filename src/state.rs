@@ -118,7 +118,11 @@ where
         Self {
             global,
             global_to_sub,
-            sub_partition_graph: vec![HashMap::new(); config.num_sub_partitions.into()],
+            sub_partition_graph: vec![
+                HashMap::new();
+                (num_partitions as u64 * config.num_sub_partitions as u64)
+                    as usize
+            ],
         }
     }
 
