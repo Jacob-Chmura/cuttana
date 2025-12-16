@@ -6,5 +6,6 @@ mod partition;
 pub use partition::partition;
 
 pub(crate) mod buffer;
+pub(crate) mod refine;
 pub(crate) mod scorer;
 pub(crate) mod state;

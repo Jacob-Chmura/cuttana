@@ -1,5 +1,6 @@
 use crate::buffer::{BufferManager, BufferScorer, CuttanaBufferScorer};
 use crate::config::CuttanaConfig;
+use crate::refine::refine;
 use crate::result::PartitionResult;
 use crate::scorer::{CuttanaPartitionScorer, PartitionScorer};
 use crate::state::CuttanaState;
@@ -66,6 +67,7 @@ where
         );
     }
 
+    refine(&mut state, config.info_gain_threshold);
     PartitionResult::from_state(state)
 }
 
