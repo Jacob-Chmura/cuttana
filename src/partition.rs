@@ -1,6 +1,6 @@
 use crate::buffer::{BufferManager, BufferScorer, CuttanaBufferScorer};
 use crate::config::CuttanaConfig;
-use crate::refine::refine;
+use crate::refine::{fix_balance, run_refinement};
 use crate::result::PartitionResult;
 use crate::scorer::{CuttanaPartitionScorer, PartitionScorer};
 use crate::state::CuttanaState;
@@ -67,7 +67,16 @@ where
         );
     }
 
-    refine(&mut state, config.info_gain_threshold, config.balance_slack);
+    let num_partitions = state.global.num_partitions as f64;
+    let num_sub_partitions = state.sub_partition(0).num_partitions as f64;
+    let num_vertices = state.global.metrics.vertex_count as f64;
+    let max_parent = (num_vertices / num_partitions * (1.0 + config.balance_slack)) as u64 + 1;
+    let max_sub = (num_sub_partitions / num_partitions * 1.5) as u64 + 1;
+
+    state.update_sub_edge_cut_by_partition();
+    fix_balance(&mut state, max_parent, max_sub);
+    run_refinement(&mut state, max_parent, max_sub, config.info_gain_threshold);
+    fix_balance(&mut state, max_parent, max_sub);
     PartitionResult::from_state(state)
 }
 

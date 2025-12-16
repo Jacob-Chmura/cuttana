@@ -169,6 +169,24 @@ where
         }
     }
 
+    pub fn update_sub_edge_cut_by_partition(&mut self) {
+        for (sub, row) in self.sub_edge_cut_by_partition.iter_mut().enumerate() {
+            let mut total_cut: u64 = 0;
+
+            // subtract edge weights for the partition of each adjacent sub
+            for (&adj_sub, &edge_weight) in self.sub_partition_graph[sub].iter() {
+                let adj_part = self.sub_to_partition[adj_sub as usize] as usize;
+                total_cut += edge_weight;
+                row[adj_part] -= edge_weight;
+            }
+
+            // add total edge cut to all partitions
+            for val in row.iter_mut() {
+                *val += total_cut;
+            }
+        }
+    }
+
     pub fn get_sub_partition_graph_edge_weight(&self, src: u16, dst: u16) -> Option<u64> {
         self.sub_partition_graph[src as usize].get(&dst).copied()
     }

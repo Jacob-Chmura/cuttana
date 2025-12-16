@@ -22,44 +22,7 @@ impl SubPartitionMove {
     }
 }
 
-pub(crate) fn refine<T>(state: &mut CuttanaState<T>, gain_threshold: u64, balance_slack: f64)
-where
-    T: Hash + Ord,
-{
-    let num_partitions = state.global.num_partitions as f64;
-    let num_sub_partitions = state.sub_partition(0).num_partitions as f64;
-    let num_vertices = state.global.metrics.vertex_count as f64;
-    let max_parent = (num_vertices / num_partitions * (1.0 + balance_slack)) as u64 + 1;
-    let max_sub = (num_sub_partitions / num_partitions * 1.5) as u64 + 1;
-
-    init_sub_edge_cut_by_partition(state);
-    fix_balance(state, max_parent, max_sub);
-    run_refinement(state, max_parent, max_sub, gain_threshold);
-    fix_balance(state, max_parent, max_sub);
-}
-
-fn init_sub_edge_cut_by_partition<T>(state: &mut CuttanaState<T>)
-where
-    T: Hash + Ord,
-{
-    for (sub, row) in state.sub_edge_cut_by_partition.iter_mut().enumerate() {
-        let mut total_cut: u64 = 0;
-
-        // subtract edge weights for the partition of each adjacent sub
-        for (&adj_sub, &edge_weight) in state.sub_partition_graph[sub].iter() {
-            let adj_part = state.sub_to_partition[adj_sub as usize] as usize;
-            total_cut += edge_weight;
-            row[adj_part] -= edge_weight;
-        }
-
-        // add total edge cut to all partitions
-        for val in row.iter_mut() {
-            *val += total_cut;
-        }
-    }
-}
-
-fn run_refinement<T>(
+pub(crate) fn run_refinement<T>(
     state: &mut CuttanaState<T>,
     max_parent: u64,
     max_sub: u64,
@@ -136,7 +99,7 @@ fn run_refinement<T>(
     }
 }
 
-fn fix_balance<T>(state: &mut CuttanaState<T>, max_parent: u64, max_sub: u64)
+pub(crate) fn fix_balance<T>(state: &mut CuttanaState<T>, max_parent: u64, max_sub: u64)
 where
     T: Hash + Ord,
 {
