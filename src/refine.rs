@@ -30,6 +30,17 @@ where
         vec![0; state.sub_partition(0).num_partitions.into()];
         state.global.num_partitions.into()
     ];
+
+    let total_sub_partitions =
+        state.sub_partition(0).num_partitions as u64 * state.global.num_partitions as u64;
+    let mut sub_to_partition: Vec<u8> = (0..total_sub_partitions)
+        .map(|i| (i / state.sub_partition(0).num_partitions as u64) as u8)
+        .collect();
+
+    // TODO: Create segment trees
+    let move_score =
+        vec![vec![0; state.global.num_partitions.into()]; state.global.num_partitions.into()];
+
     //for (int sub_id = 0; sub_id < SUB_PARTITION_COUNT; sub_id++)
     //{
     //    int sub_total_edge_cut = 0;
@@ -48,16 +59,18 @@ where
 
     fix_balance(
         state,
-        sub_in_partition,
-        sub_edge_cut_by_partition,
+        &mut move_score,
+        &mut sub_in_partition,
+        &mut sub_to_partition,
+        &mut sub_edge_cut_by_partition,
         refine_capacity,
         max_sub_in_partition,
     );
 
     loop {
         let mut best_score = f64::INFINITY;
-        let mut partitions_to_move: Vec<(u16, u8, u8)> = Vec::new(); // sub, from_partition,
-        // to_partition
+        let mut partitions_to_move: Vec<(u16, u8, u8)> = Vec::new(); // sub, assigned_partition,
+        // adj_partition
 
         for (p_u, &p_u_sz) in state.global.partition_sizes.iter().enumerate() {
             for (p_v, &p_v_sz) in state.global.partition_sizes.iter().enumerate() {
@@ -113,22 +126,26 @@ where
             break;
         }
 
-        for (sub, from_partition, to_partition) in partitions_to_move.drain(..) {
+        for (sub, assigned_partition, adj_partition) in partitions_to_move.drain(..) {
             move_sub_partition(
                 state,
-                sub_in_partition,
-                sub_edge_cut_by_partition,
+                &mut move_score,
+                &mut sub_in_partition,
+                &mut sub_to_partition,
+                &mut sub_edge_cut_by_partition,
                 sub,
-                from_partition,
-                to_partition,
+                assigned_partition,
+                adj_partition,
             );
         }
     }
 
     fix_balance(
         state,
-        sub_in_partition,
-        sub_edge_cut_by_partition,
+        &mut move_score,
+        &mut sub_in_partition,
+        &mut sub_to_partition,
+        &mut sub_edge_cut_by_partition,
         refine_capacity,
         max_sub_in_partition,
     );
@@ -136,16 +153,18 @@ where
 
 fn fix_balance<T>(
     state: &mut CuttanaState<T>,
-    sub_in_partition: Vec<u64>,
-    sub_edge_cut_by_partition: Vec<Vec<u64>>,
+    move_score: &mut Vec<Vec<i32>>,
+    sub_in_partition: &mut Vec<u64>,
+    sub_to_partition: &mut Vec<u8>,
+    sub_edge_cut_by_partition: &mut Vec<Vec<u64>>,
     refine_capacity: u64,
     max_sub_in_partition: u64,
 ) where
     T: Eq + Hash + Clone + Ord,
 {
     loop {
-        let mut best: Option<(f64, u16, u8, u8)> = None; // score, sub_partition, from_partition,
-        // to_partition
+        let mut best: Option<(f64, u16, u8, u8)> = None; // score, sub_partition, assigned_partition,
+        // adj_partition
 
         for (p_u, &p_u_sz) in state.global.partition_sizes.iter().enumerate() {
             for (p_v, &p_v_sz) in state.global.partition_sizes.iter().enumerate() {
@@ -174,34 +193,40 @@ fn fix_balance<T>(
             }
         }
 
-        let Some((_, sub, from_partition, to_partition)) = best else {
+        let Some((_, sub, assigned_partition, adj_partition)) = best else {
             break;
         };
         move_sub_partition(
             state,
+            move_score,
             sub_in_partition,
+            sub_to_partition,
             sub_edge_cut_by_partition,
             sub,
-            from_partition,
-            to_partition,
+            assigned_partition,
+            adj_partition,
         );
     }
 }
 
 fn move_sub_partition<T>(
     state: &mut CuttanaState<T>,
-    sub_in_partition: Vec<u64>,
-    sub_edge_cut_by_partition: Vec<Vec<u64>>,
+    move_score: &mut Vec<Vec<i32>>,
+    sub_in_partition: &mut Vec<u64>,
+    sub_to_partition: &mut Vec<u8>,
+    sub_edge_cut_by_partition: &mut Vec<Vec<u64>>,
     sub: u16,
-    from_partition: u8,
-    to_partition: u8,
+    assigned_partition: u8,
+    adj_partition: u8,
 ) where
     T: Eq + Hash + Clone + Ord,
 {
     for partition in 0..state.global.num_partitions {
         update_move_score(
             state,
+            move_score,
             sub_edge_cut_by_partition,
+            sub_to_partition,
             sub,
             partition,
             UpdateType::REMOVE,
@@ -209,19 +234,19 @@ fn move_sub_partition<T>(
     }
 
     for adj_sub in state.sub_partition_graph[sub] {
-        let edge_weight = state.sub_partition_graph[sub][adj_sub];
-        sub_edge_cut_by_partition[adj_sub][from_partition] += edge_weight;
-        sub_edge_cut_by_partition[adj_sub][to_partition] -= edge_weight;
+        let edge_weight = state.sub_partition_graph[sub][adj_sub.into()];
+        sub_edge_cut_by_partition[adj_sub][assigned_partition] += edge_weight;
+        sub_edge_cut_by_partition[adj_sub][adj_partition] -= edge_weight;
     }
 
-    state.global.partition_sizes[from_partition.into()] -=
-        state.sub_partition(from_partition).partition_sizes[sub.into()];
-    state.global.partition_sizes[to_partition.into()] +=
-        state.sub_partition(from_partition).partition_sizes[sub.into()];
+    state.global.partition_sizes[assigned_partition.into()] -=
+        state.sub_partition(assigned_partition).partition_sizes[sub.into()];
+    state.global.partition_sizes[adj_partition.into()] +=
+        state.sub_partition(assigned_partition).partition_sizes[sub.into()];
 
-    sub_to_partition[sub] = to_partition;
-    sub_in_partition[from_partition.into()] -= 1;
-    sub_in_partition[to_partition.into()] += 1;
+    sub_to_partition[sub.into()] = adj_partition;
+    sub_in_partition[assigned_partition.into()] -= 1;
+    sub_in_partition[adj_partition.into()] += 1;
 
     let mut buckets: Vec<Vec<i32>> = Vec::with_capacity(state.global.num_partitions.into());
     for adj_sub in state.sub_partition_graph[sub] {
@@ -231,14 +256,16 @@ fn move_sub_partition<T>(
     // TODO: OMP PARALLEL
     for p in 0..state.global.num_partitions {
         for adj_sub in buckets[p.into()] {
-            if sub_to_partition[adj_sub] == from_partition
-                || sub_to_partition[adj_sub] == to_partition
+            if sub_to_partition[adj_sub as usize] == assigned_partition
+                || sub_to_partition[adj_sub as usize] == adj_partition
             {
                 for pp in 0..state.global.num_partitions {
                     update_move_score(
                         state,
+                        move_score,
                         sub_edge_cut_by_partition,
-                        adj_sub,
+                        sub_to_partition,
+                        adj_sub as u16,
                         pp,
                         UpdateType::UPDATE,
                     );
@@ -246,53 +273,66 @@ fn move_sub_partition<T>(
             } else {
                 update_move_score(
                     state,
+                    move_score,
                     sub_edge_cut_by_partition,
-                    adj_sub,
-                    from_partition,
+                    sub_to_partition,
+                    adj_sub as u16,
+                    assigned_partition,
                     UpdateType::UPDATE,
                 );
                 update_move_score(
                     state,
+                    move_score,
                     sub_edge_cut_by_partition,
-                    adj_sub,
-                    to_partition,
+                    sub_to_partition,
+                    adj_sub as u16,
+                    adj_partition,
                     UpdateType::UPDATE,
                 );
             }
         }
     }
 
-    for pp in 0..state.global.num_partitions {
-        update_move_score(state, sub_edge_cut_by_partition, sub, pp, UpdateType::ADD);
+    for partition in 0..state.global.num_partitions {
+        update_move_score(
+            state,
+            move_score,
+            sub_edge_cut_by_partition,
+            sub_to_partition,
+            sub,
+            partition,
+            UpdateType::ADD,
+        );
     }
 }
 
 fn update_move_score<T>(
     state: &mut CuttanaState<T>,
-    sub_edge_cut_by_partition: Vec<Vec<u64>>,
+    move_score: &mut Vec<Vec<i32>>,
+    sub_edge_cut_by_partition: &Vec<Vec<u64>>,
+    sub_to_partition: &Vec<u8>,
     sub: u16,
-    to_partition: u8,
+    adj_partition: u8,
     update: UpdateType,
 ) where
     T: Eq + Hash + Clone + Ord,
 {
-    let from_partition = sub_to_partition[sub];
-
-    let edge_cut_after = sub_edge_cut_by_partition[sub.into()][to_partition];
-    let edge_cut_before = sub_edge_cut_by_partition[sub.into()][from_partition];
+    let assigned_partition: usize = sub_to_partition[sub.into()];
+    let edge_cut_after = sub_edge_cut_by_partition[sub as usize][adj_partition.into()];
+    let edge_cut_before = sub_edge_cut_by_partition[sub as usize][assigned_partition];
     let delta = edge_cut_after - edge_cut_before;
 
-    let st_pos = &mut sub_to_segtree_ind[sub][to_partition];
+    let st_pos = &mut sub_to_segtree_ind[sub][adj_partition];
     match update {
         UpdateType::ADD => {
-            *st_pos = move_score[from_partition][to_partition].add(sub, delta);
+            *st_pos = move_score[assigned_partition][adj_partition.into()].add(sub, delta);
         }
         UpdateType::REMOVE => {
-            move_score[from_partition][to_partition].remove(sub, st_pos);
+            move_score[assigned_partition][adj_partition.into()].remove(sub, st_pos);
             st_pos = -1;
         }
         UpdateType::UPDATE => {
-            move_score[from_partition][to_partition].udpate(sub, delta, st_pos);
+            move_score[assigned_partition][adj_partition.into()].update(sub, delta, st_pos);
         }
     }
 }
