@@ -99,6 +99,13 @@ pub(crate) struct CuttanaState<T> {
     pub sub_edge_cut_by_partition: Vec<Vec<u64>>,
 }
 
+#[derive(Debug, Clone, Copy)]
+enum UpdateType {
+    Add,
+    Remove,
+    Update,
+}
+
 impl<T> CuttanaState<T>
 where
     T: Eq + Hash,
@@ -159,6 +166,72 @@ where
         for p in 0..self.global.num_partitions {
             self.sub_partition(p).metrics.vertex_count = v_eff;
             self.sub_partition(p).metrics.edge_count = e_eff;
+        }
+    }
+
+    pub fn get_sub_partition_graph_edge_weight(&self, src: u16, dst: u16) -> Option<u64> {
+        self.sub_partition_graph[src as usize].get(&dst).copied()
+    }
+
+    pub fn move_sub_partition(&mut self, sub: u16, from: u8, to: u8) {
+        self.update_move_score_all_partitions(sub, UpdateType::Remove);
+
+        let (sub_idx, from_idx, to_idx) = (sub as usize, from as usize, to as usize);
+        for (&adj, &edge_weight) in self.sub_partition_graph[sub_idx].iter() {
+            self.sub_edge_cut_by_partition[adj as usize][to_idx] += edge_weight;
+            self.sub_edge_cut_by_partition[adj as usize][from_idx] -= edge_weight;
+        }
+
+        let sub_size = self.sub_partition(from).partition_sizes[sub_idx];
+        self.global.partition_sizes[from_idx] -= sub_size;
+        self.global.partition_sizes[to_idx] += sub_size;
+        self.sub_to_partition[sub_idx] = to;
+        self.sub_in_partition[from_idx] -= 1;
+        self.sub_in_partition[to_idx] += 1;
+
+        let mut buckets = vec![Vec::<u16>::new(); self.global.num_partitions as usize];
+        for &adj in self.sub_partition_graph[sub_idx].keys() {
+            let p = self.sub_to_partition[adj as usize] as usize;
+            buckets[p].push(adj);
+        }
+
+        // TODO: OMP PARALLEL
+        for bucket in &buckets {
+            for &adj in bucket {
+                let adj_part = self.sub_to_partition[adj as usize];
+                if adj_part == from || adj_part == to {
+                    self.update_move_score_all_partitions(adj, UpdateType::Update);
+                } else {
+                    self.update_move_score(adj, from, UpdateType::Update);
+                    self.update_move_score(adj, to, UpdateType::Update);
+                }
+            }
+        }
+        self.update_move_score_all_partitions(sub, UpdateType::Add);
+    }
+
+    fn update_move_score_all_partitions(&mut self, sub: u16, update: UpdateType) {
+        for partition in 0..self.global.num_partitions {
+            self.update_move_score(sub, partition, update);
+        }
+    }
+
+    fn update_move_score(&mut self, sub: u16, adj_partition: u8, update: UpdateType) {
+        let assigned_partition = self.sub_to_partition[sub as usize];
+        let edge_cut = &self.sub_edge_cut_by_partition[sub as usize];
+        let _delta = edge_cut[adj_partition as usize] - edge_cut[assigned_partition as usize];
+        //let st_pos = &mut sub_to_segtree_ind[sub][adj_partition];
+        match update {
+            UpdateType::Add => {
+                //*st_pos = move_score[assigned_partition][adj_partition.into()].add(sub, delta);
+            }
+            UpdateType::Remove => {
+                //move_score[assigned_partition][adj_partition.into()].remove(sub, st_pos);
+                //st_pos = -1;
+            }
+            UpdateType::Update => {
+                //move_score[assigned_partition][adj_partition.into()].update(sub, delta, st_pos);
+            }
         }
     }
 }
