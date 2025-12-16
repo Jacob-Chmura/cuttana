@@ -93,6 +93,10 @@ pub(crate) struct CuttanaState<T> {
     pub global: PartitionCore<T, u8>,
     pub global_to_sub: HashMap<u8, PartitionCore<T, u16>>,
     pub sub_partition_graph: Vec<HashMap<u16, u64>>,
+    pub _sub_move_score: Vec<Vec<i32>>, // TODO: Create segment trees
+    pub sub_in_partition: Vec<u16>,
+    pub sub_to_partition: Vec<u8>,
+    pub sub_edge_cut_by_partition: Vec<Vec<u64>>,
 }
 
 impl<T> CuttanaState<T>
@@ -118,11 +122,22 @@ where
         Self {
             global,
             global_to_sub,
-            sub_partition_graph: vec![
-                HashMap::new();
-                (num_partitions as u64 * config.num_sub_partitions as u64)
-                    as usize
-            ],
+            sub_partition_graph: {
+                let total_sub_partitions = config.num_sub_partitions as u64 * num_partitions as u64;
+                vec![HashMap::new(); total_sub_partitions as usize]
+            },
+            _sub_move_score: vec![vec![0; num_partitions.into()]; num_partitions.into()],
+            sub_in_partition: vec![config.num_sub_partitions; num_partitions.into()],
+            sub_to_partition: {
+                let total_sub_partitions = config.num_sub_partitions as u64 * num_partitions as u64;
+                (0..total_sub_partitions)
+                    .map(|i| (i / config.num_sub_partitions as u64) as u8)
+                    .collect()
+            },
+            sub_edge_cut_by_partition: {
+                let total_sub_partitions = config.num_sub_partitions as u64 * num_partitions as u64;
+                vec![vec![0; num_partitions.into()]; total_sub_partitions as usize]
+            },
         }
     }
 

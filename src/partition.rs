@@ -67,7 +67,7 @@ where
         );
     }
 
-    refine(&mut state, config.info_gain_threshold);
+    refine(&mut state, config.info_gain_threshold, config.balance_slack);
     PartitionResult::from_state(state)
 }
 
