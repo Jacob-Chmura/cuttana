@@ -70,7 +70,7 @@ where
     state.update_sub_edge_cut_by_partition();
 
     let num_partitions = state.global.num_partitions as f64;
-    let num_sub_partitions = state.sub_partition(0).num_partitions as f64;
+    let num_sub_partitions = state.partition(0).num_partitions as f64;
     let num_vertices = state.global.metrics.vertex_count as f64;
     let max_parent = (num_vertices / num_partitions * (1.0 + config.balance_slack)) as u64 + 1;
     let max_sub = (num_sub_partitions / num_partitions * 1.5) as u64 + 1;
@@ -110,13 +110,13 @@ fn partition_vertex<T, B: PartitionScorer, S: BufferScorer>(
     }
 
     let best_sub_partition: u16 =
-        sub_scorer.find_best_partition(v, nbrs, state.sub_partition(best_partition));
+        sub_scorer.find_best_partition(v, nbrs, state.partition(best_partition));
     state
-        .sub_partition(best_partition)
+        .partition(best_partition)
         .assign_partition(v.clone(), best_sub_partition);
 
     for nbr in nbrs {
-        if let Some(nbr_sub_partition) = state.sub_partition(best_partition).partition_of(nbr)
+        if let Some(nbr_sub_partition) = state.partition(best_partition).partition_of(nbr)
             && nbr_sub_partition != best_sub_partition
         {
             state.sub_partitions[best_sub_partition as usize].add_edge(nbr_sub_partition);

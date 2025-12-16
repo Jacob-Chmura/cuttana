@@ -166,7 +166,7 @@ where
         }
     }
 
-    pub fn sub_partition(&mut self, global_partition: u8) -> &mut PartitionCore<T, u16> {
+    pub fn partition(&mut self, global_partition: u8) -> &mut PartitionCore<T, u16> {
         self.global_to_sub
             .get_mut(&global_partition)
             .expect("Global partition does not exist")
@@ -182,8 +182,8 @@ where
             .round() as u64;
 
         for p in 0..self.global.num_partitions {
-            self.sub_partition(p).metrics.vertex_count = v_eff;
-            self.sub_partition(p).metrics.edge_count = e_eff;
+            self.partition(p).metrics.vertex_count = v_eff;
+            self.partition(p).metrics.edge_count = e_eff;
         }
     }
 
