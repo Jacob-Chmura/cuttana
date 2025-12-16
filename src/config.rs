@@ -7,6 +7,7 @@ pub struct CuttanaConfig {
     pub gamma: f64,
     pub sub_gamma: f64,
     pub theta: f64,
+    pub info_gain_threshold: f64,
 }
 
 impl CuttanaConfig {
@@ -18,6 +19,7 @@ impl CuttanaConfig {
         gamma: f64,
         sub_gamma: f64,
         theta: f64,
+        info_gain_threshold: f64,
     ) -> Result<Self, &'static str> {
         if balance_slack < 0.0 {
             return Err("balance_slack must be >= 0");
@@ -31,6 +33,7 @@ impl CuttanaConfig {
             gamma,
             sub_gamma,
             theta,
+            info_gain_threshold,
         })
     }
 }
@@ -46,6 +49,7 @@ impl Default for CuttanaConfig {
             1.5,       // gamma
             1.0,       // sub_gamma
             2.0,       // theta
+            0.0,       // info_gain_threshold
         )
         .unwrap()
     }

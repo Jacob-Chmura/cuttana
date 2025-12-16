@@ -1,5 +1,6 @@
 use crate::buffer::{BufferManager, BufferScorer, CuttanaBufferScorer};
 use crate::config::CuttanaConfig;
+use crate::refine::refine;
 use crate::result::PartitionResult;
 use crate::scorer::{CuttanaPartitionScorer, PartitionScorer};
 use crate::state::CuttanaState;
@@ -66,6 +67,7 @@ where
         );
     }
 
+    refine(&mut state, config.info_gain_threshold, config.balance_slack);
     PartitionResult::from_state(state)
 }
 
@@ -96,7 +98,6 @@ fn partition_vertex<T, B: PartitionScorer, S: BufferScorer>(
         }
     }
 
-    // TODO: Get sub scorer
     let best_sub_partition: u16 =
         sub_scorer.find_best_partition(v, nbrs, state.sub_partition(best_partition));
     state
@@ -107,11 +108,16 @@ fn partition_vertex<T, B: PartitionScorer, S: BufferScorer>(
         if let Some(nbr_sub_partition) = state.sub_partition(best_partition).partition_of(nbr)
             && nbr_sub_partition != best_sub_partition
         {
-            *state.sub_partition_graph[best_sub_partition as usize]
-                .entry(nbr_sub_partition)
+            let src = (best_partition as u64 * state.sub_partition(0).num_partitions as u64)
+                + best_sub_partition as u64;
+            let dst = (best_partition as u64 * state.sub_partition(0).num_partitions as u64)
+                + nbr_sub_partition as u64;
+
+            *state.sub_partition_graph[src as usize]
+                .entry(dst as u16)
                 .or_insert(0) += 1;
-            *state.sub_partition_graph[nbr_sub_partition as usize]
-                .entry(best_sub_partition)
+            *state.sub_partition_graph[dst as usize]
+                .entry(src as u16)
                 .or_insert(0) += 1;
         }
     }
