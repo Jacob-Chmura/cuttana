@@ -38,7 +38,7 @@ where
         .collect();
 
     // TODO: Create segment trees
-    let move_score =
+    let mut move_score =
         vec![vec![0; state.global.num_partitions.into()]; state.global.num_partitions.into()];
 
     //for (int sub_id = 0; sub_id < SUB_PARTITION_COUNT; sub_id++)
@@ -78,8 +78,13 @@ where
                     continue;
                 }
 
-                let (score, sub_u) = move_score[p_u][p_v].get_min();
-                let sub_u_size = state.sub_partition(p_u as u8).partition_sizes[sub_u as usize];
+                // let (score, sub_u) = move_score[p_u][p_v].get_min();
+                let (score, sub_u) = (f64::INFINITY, 0);
+                let sub_u_size = state
+                    .global_to_sub
+                    .get(&(p_u as u8))
+                    .unwrap()
+                    .partition_sizes[sub_u as usize];
 
                 // Case 1: direct move fits
                 if (p_v_sz + sub_u_size) as u64 <= refine_capacity_ub {
@@ -90,21 +95,22 @@ where
                 }
                 // Case 2: overflow: try secondary move p_v -> p_w
                 else {
-                    for (p_w, p_w_sz) in state.global.partition_sizes.iter().enumerate() {
+                    for (p_w, _) in state.global.partition_sizes.iter().enumerate() {
                         if p_w == p_v || sub_in_partition[p_w] >= max_sub_in_partition {
                             continue;
                         }
 
-                        let (score_2, sub_v) = move_score[p_v][p_w].get_min();
+                        //let (score_2, sub_v) = move_score[p_v][p_w].get_min();
+                        let (score_2, sub_v) = (f64::INFINITY, 1);
                         let mut effective_score = score + score_2;
 
-                        effective_score += state.sub_partition_graph[sub_u.into()]
+                        effective_score += state.sub_partition_graph[sub_u as usize]
                             .get(&sub_v)
                             .copied()
                             .unwrap_or(0) as f64;
 
                         if p_w == p_u {
-                            effective_score += state.sub_partition_graph[sub_v.into()]
+                            effective_score += state.sub_partition_graph[sub_v as usize]
                                 .get(&sub_u)
                                 .copied()
                                 .unwrap_or(0) as f64;
@@ -173,8 +179,13 @@ fn fix_balance<T>(
                     continue;
                 }
 
-                let (score, sub_u) = move_score[p_u][p_v].get_min();
-                let sub_size = state.sub_partition(p_u as u8).partition_sizes[sub_u as usize];
+                //let (score, sub_u) = move_score[p_u][p_v].get_min();
+                let (score, sub_u) = (f64::INFINITY, 0);
+                let sub_size = state
+                    .global_to_sub
+                    .get(&(p_u as u8))
+                    .unwrap()
+                    .partition_sizes[sub_u as usize];
                 if (p_v_sz + sub_size) as u64 > refine_capacity {
                     continue;
                 }
