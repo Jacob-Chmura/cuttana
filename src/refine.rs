@@ -111,7 +111,6 @@ where
                 continue;
             }
             let from = from_idx as u8;
-            let sub_part = &state.global_to_sub[&from];
 
             for (to_idx, &to_size) in state.global.partition_sizes.iter().enumerate() {
                 if to_size as u64 >= max_parent || state.sub_in_partition[to_idx] as u64 >= max_sub
@@ -121,7 +120,7 @@ where
 
                 let to = to_idx as u8;
                 let (score, sub) = (u64::MAX, 0u16); // move_score[p_u][p_v].get_min();
-                let sub_size = sub_part.partition_sizes[sub as usize];
+                let sub_size = state.global_to_sub[&from].partition_sizes[sub as usize];
                 if (to_size + sub_size) as u64 > max_parent {
                     continue;
                 }
