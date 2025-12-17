@@ -1,4 +1,4 @@
-use crate::state::PartitionCore;
+use crate::state::PartitionAssignment;
 use rand::Rng;
 use rand::rngs::ThreadRng;
 use std::hash::Hash;
@@ -8,7 +8,7 @@ pub(crate) trait PartitionScorer {
         &mut self,
         v: &T,
         nbrs: &[T],
-        core: &PartitionCore<T, P>,
+        core: &PartitionAssignment<T, P>,
     ) -> P;
 }
 
@@ -27,7 +27,7 @@ impl CuttanaPartitionScorer {
 
     fn compute_score<T, P: Copy + Into<usize>>(
         &self,
-        core: &PartitionCore<T, P>,
+        core: &PartitionAssignment<T, P>,
         partition: P,
     ) -> f64 {
         let partition_size = core.partition_sizes[partition.into()] as f64;
@@ -46,7 +46,7 @@ impl PartitionScorer for CuttanaPartitionScorer {
         &mut self,
         _v: &T,
         nbrs: &[T],
-        core: &PartitionCore<T, P>,
+        core: &PartitionAssignment<T, P>,
     ) -> P {
         // First candidate is just smallest partition
         let mut best_partition = core.smallest_partition();

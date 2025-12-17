@@ -4,15 +4,15 @@ use std::collections::HashMap;
 use std::hash::Hash;
 
 /// Tracks vertex-based partition assignment output from a graph partioner
-pub(crate) struct PartitionCore<T, P> {
+pub(crate) struct PartitionAssignment<T, P> {
     pub assignments: HashMap<T, P>, // vertex -> partition id
     pub partition_sizes: Vec<u32>,
     pub num_partitions: P,
-    pub balance_slack: f64,
     pub metrics: PartitionMetrics,
+    balance_slack: f64,
 }
 
-impl<T, P> PartitionCore<T, P>
+impl<T, P> PartitionAssignment<T, P>
 where
     T: Eq + Hash,
     P: Copy + Into<usize> + TryFrom<usize>,
@@ -65,18 +65,30 @@ where
     }
 }
 
-pub(crate) struct SubPartition {
+pub(crate) struct PartitionInfo {
+    pub num_sub: u16,
+    pub _move_score: Vec<i32>, // TODO: Segment Trees
+}
+
+impl PartitionInfo {
+    pub fn new(num_partitions: u8, num_sub: u16) -> Self {
+        Self {
+            num_sub,
+            _move_score: vec![0; num_partitions as usize],
+        }
+    }
+}
+
+pub(crate) struct SubPartitionInfo {
     pub parent: u8,
-    pub size: u32,
     pub edges: HashMap<u16, u64>,
     pub edge_cuts: Vec<u64>,
 }
 
-impl SubPartition {
-    pub fn new(parent: u8, size: u32, num_partitions: u8) -> Self {
+impl SubPartitionInfo {
+    pub fn new(parent: u8, num_partitions: u8) -> Self {
         Self {
             parent,
-            size,
             edges: HashMap::new(),
             edge_cuts: vec![0; num_partitions as usize],
         }
@@ -89,11 +101,10 @@ impl SubPartition {
 
 /// Cuttana Partioning State
 pub(crate) struct CuttanaState<T> {
-    pub global: PartitionCore<T, u8>,
-    pub global_to_sub: HashMap<u8, PartitionCore<T, u16>>,
-    pub sub_partitions: Vec<SubPartition>,
-    pub sub_in_partition: Vec<u16>,
-    pub _sub_move_score: Vec<Vec<i32>>, // TODO: Create segment trees
+    pub global_assignments: PartitionAssignment<T, u8>,
+    pub local_assignments: HashMap<u8, PartitionAssignment<T, u16>>,
+    pub partitions: Vec<PartitionInfo>,
+    pub sub_partitions: Vec<SubPartitionInfo>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -112,14 +123,14 @@ where
         // user-specified slack parameter. E.g. see:
         // https://github.com/cuttana/cuttana-partitioner/blob/ed0c18251273a41792c1fc3e909d4ced44beaa27/partitioners/ogpart_single_thread.cpp#L167
         let balance_slack = (config.balance_slack * 2.0).min(config.balance_slack + 0.5);
-        let global = PartitionCore::new(num_partitions, balance_slack);
+        let global = PartitionAssignment::new(num_partitions, balance_slack);
 
         // Pre-create sub-partitions for each global partition
         let mut global_to_sub = HashMap::new();
         for g in 0..num_partitions {
             global_to_sub.insert(
                 g,
-                PartitionCore::new(config.num_sub_partitions, balance_slack),
+                PartitionAssignment::new(config.num_sub_partitions, balance_slack),
             );
         }
 
@@ -127,37 +138,45 @@ where
         let sub_partitions = (0..total_sub_partitions)
             .map(|id| {
                 let parent = (id / config.num_sub_partitions as u64) as u8;
-                SubPartition::new(parent, config.num_sub_partitions.into(), num_partitions)
+                SubPartitionInfo::new(parent, num_partitions)
             })
             .collect();
 
+        let partitions = (0..num_partitions)
+            .map(|_| PartitionInfo::new(num_partitions, config.num_sub_partitions))
+            .collect();
+
         Self {
-            global,
-            global_to_sub,
+            global_assignments: global,
+            local_assignments: global_to_sub,
+            partitions,
             sub_partitions,
-            sub_in_partition: vec![config.num_sub_partitions; num_partitions as usize],
-            _sub_move_score: vec![vec![0; num_partitions.into()]; num_partitions.into()],
         }
     }
 
-    pub fn partition(&mut self, global_partition: u8) -> &mut PartitionCore<T, u16> {
-        self.global_to_sub
+    pub fn local_assignment_for(
+        &mut self,
+        global_partition: u8,
+    ) -> &mut PartitionAssignment<T, u16> {
+        self.local_assignments
             .get_mut(&global_partition)
             .expect("Global partition does not exist")
     }
 
     pub fn update_metrics(&mut self, _v: &T, nbrs: &[T]) {
-        self.global.metrics.vertex_count += 1;
-        self.global.metrics.edge_count += nbrs.len() as u64;
+        self.global_assignments.metrics.vertex_count += 1;
+        self.global_assignments.metrics.edge_count += nbrs.len() as u64;
 
-        let v_eff = (self.global.metrics.vertex_count as f64 / self.global.num_partitions as f64)
+        let v_eff = (self.global_assignments.metrics.vertex_count as f64
+            / self.global_assignments.num_partitions as f64)
             .round() as u64;
-        let e_eff = (self.global.metrics.edge_count as f64 / self.global.num_partitions as f64)
+        let e_eff = (self.global_assignments.metrics.edge_count as f64
+            / self.global_assignments.num_partitions as f64)
             .round() as u64;
 
-        for p in 0..self.global.num_partitions {
-            self.partition(p).metrics.vertex_count = v_eff;
-            self.partition(p).metrics.edge_count = e_eff;
+        for p in 0..self.global_assignments.num_partitions {
+            self.local_assignment_for(p).metrics.vertex_count = v_eff;
+            self.local_assignment_for(p).metrics.edge_count = e_eff;
         }
     }
 
@@ -209,17 +228,17 @@ where
         }
 
         // Update partition sizes
-        let sub_size = self.sub_partitions[sub_idx].size;
-        self.global.partition_sizes[from_idx] -= sub_size;
-        self.global.partition_sizes[to_idx] += sub_size;
+        let sub_size = self.local_assignment_for(from).partition_sizes[sub_idx];
+        self.global_assignments.partition_sizes[from_idx] -= sub_size;
+        self.global_assignments.partition_sizes[to_idx] += sub_size;
 
         // Update assignment and counts
         self.sub_partitions[sub_idx].parent = to;
-        self.sub_in_partition[from_idx] -= 1;
-        self.sub_in_partition[to_idx] += 1;
+        self.partitions[from_idx].num_sub -= 1;
+        self.partitions[to_idx].num_sub += 1;
 
         // Build buckets of neighbors grouped by parent
-        let mut buckets = vec![Vec::<u16>::new(); self.global.num_partitions as usize];
+        let mut buckets = vec![Vec::<u16>::new(); self.global_assignments.num_partitions as usize];
         for &adj_sub in self.sub_partitions[sub_idx].edges.keys() {
             let parent = self.sub_partitions[adj_sub as usize].parent as usize;
             buckets[parent].push(adj_sub);
@@ -242,7 +261,7 @@ where
     }
 
     fn update_move_score_all_partitions(&mut self, sub: u16, update: UpdateType) {
-        for partition in 0..self.global.num_partitions {
+        for partition in 0..self.global_assignments.num_partitions {
             self.update_move_score(sub, partition, update);
         }
     }

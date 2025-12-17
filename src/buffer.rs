@@ -145,7 +145,7 @@ impl BufferScorer for CuttanaBufferScorer {
         let degree = nbrs.len() as f64;
         let num_nbrs_partitioned = nbrs
             .iter()
-            .filter(|nbr| state.global.partition_of(nbr).is_some())
+            .filter(|nbr| state.global_assignments.partition_of(nbr).is_some())
             .count() as f64;
 
         self.theta * (num_nbrs_partitioned / degree) + (degree / self.buffer_deg_threshold)

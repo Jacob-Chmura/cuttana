@@ -35,16 +35,16 @@ pub(crate) fn run_refinement<T>(
     loop {
         let mut moves: Option<(u64, Vec<SubPartitionMove>)> = None;
 
-        for (from_idx, &from_size) in state.global.partition_sizes.iter().enumerate() {
-            for (to_idx, &to_size) in state.global.partition_sizes.iter().enumerate() {
-                let sub_in_to_partition = state.sub_in_partition[to_idx] as u64;
+        for (from_idx, &from_size) in state.global_assignments.partition_sizes.iter().enumerate() {
+            for (to_idx, &to_size) in state.global_assignments.partition_sizes.iter().enumerate() {
+                let sub_in_to_partition = state.partitions[to_idx].num_sub as u64;
                 if from_size == 0 || from_idx == to_idx || sub_in_to_partition >= max_sub {
                     continue;
                 }
 
                 let (from, to) = (from_idx as u8, to_idx as u8);
                 let (score, sub) = (u64::MAX, 0u16); // move_score[p_u][p_v].get_min()
-                let sub_size = state.global_to_sub[&from].partition_sizes[sub as usize];
+                let sub_size = state.local_assignments[&from].partition_sizes[sub as usize];
 
                 // Case 1: Direct move fits
                 if (to_size + sub_size) as u64 <= refine_capacity {
@@ -55,8 +55,10 @@ pub(crate) fn run_refinement<T>(
                 }
                 // Case 2: Try secondary move (evict a sub partition out of to)
                 else {
-                    for (evict_idx, _) in state.global.partition_sizes.iter().enumerate() {
-                        let sub_in_evict_partition = state.sub_in_partition[evict_idx] as u64;
+                    for (evict_idx, _) in
+                        state.global_assignments.partition_sizes.iter().enumerate()
+                    {
+                        let sub_in_evict_partition = state.partitions[evict_idx].num_sub as u64;
                         if to_idx == evict_idx || sub_in_evict_partition >= max_sub {
                             continue;
                         }
@@ -106,21 +108,22 @@ where
     loop {
         let mut best_move: Option<SubPartitionMove> = None;
 
-        for (from_idx, &from_size) in state.global.partition_sizes.iter().enumerate() {
+        for (from_idx, &from_size) in state.global_assignments.partition_sizes.iter().enumerate() {
             if from_size as u64 <= max_parent {
                 continue;
             }
             let from = from_idx as u8;
 
-            for (to_idx, &to_size) in state.global.partition_sizes.iter().enumerate() {
-                if to_size as u64 >= max_parent || state.sub_in_partition[to_idx] as u64 >= max_sub
+            for (to_idx, &to_size) in state.global_assignments.partition_sizes.iter().enumerate() {
+                if to_size as u64 >= max_parent
+                    || state.partitions[to_idx].num_sub as u64 >= max_sub
                 {
                     continue;
                 }
 
                 let to = to_idx as u8;
                 let (score, sub) = (u64::MAX, 0u16); // move_score[p_u][p_v].get_min();
-                let sub_size = state.global_to_sub[&from].partition_sizes[sub as usize];
+                let sub_size = state.local_assignments[&from].partition_sizes[sub as usize];
                 if (to_size + sub_size) as u64 > max_parent {
                     continue;
                 }

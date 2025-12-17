@@ -14,15 +14,15 @@ pub struct PartitionResult<T> {
 impl<T> PartitionResult<T> {
     pub(crate) fn from_state(state: CuttanaState<T>) -> Self {
         Self {
-            assignments: state.global.assignments,
-            partition_sizes: state.global.partition_sizes,
-            vertex_count: state.global.metrics.vertex_count,
-            edge_count: state.global.metrics.edge_count,
-            edge_cut_ratio: state.global.metrics.edge_cut_ratio(),
+            assignments: state.global_assignments.assignments,
+            partition_sizes: state.global_assignments.partition_sizes,
+            vertex_count: state.global_assignments.metrics.vertex_count,
+            edge_count: state.global_assignments.metrics.edge_count,
+            edge_cut_ratio: state.global_assignments.metrics.edge_cut_ratio(),
             communication_volume: state
-                .global
+                .global_assignments
                 .metrics
-                .communication_volume(state.global.num_partitions as u64),
+                .communication_volume(state.global_assignments.num_partitions as u64),
         }
     }
 }
