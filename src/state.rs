@@ -1,30 +1,7 @@
 use crate::config::CuttanaConfig;
+use crate::metrics::PartitionMetrics;
 use std::collections::HashMap;
 use std::hash::Hash;
-
-/// Partition quality metrics collected during partitioning
-#[derive(Default, Debug, Clone)]
-pub(crate) struct PartitionMetrics {
-    pub vertex_count: u64,
-    pub edge_count: u64,
-    pub cut_count: u64,
-}
-
-impl PartitionMetrics {
-    pub fn edge_cut_ratio(&self) -> f64 {
-        if self.edge_count == 0 {
-            return 0.0;
-        }
-        self.cut_count as f64 / self.edge_count as f64
-    }
-
-    pub fn communication_volume(&self, num_partitions: u64) -> f64 {
-        if num_partitions == 0 || self.vertex_count == 0 {
-            return 0.0;
-        }
-        self.cut_count as f64 / (num_partitions * self.vertex_count) as f64
-    }
-}
 
 /// Tracks vertex-based partition assignment output from a graph partioner
 pub(crate) struct PartitionCore<T, P> {
@@ -88,15 +65,42 @@ where
     }
 }
 
+pub(crate) struct SubPartition {
+    pub parent: u8,
+    pub size: u32,
+    pub edges: HashMap<u16, u64>,
+    pub edge_cuts: Vec<u64>,
+}
+
+impl SubPartition {
+    pub fn new(parent: u8, size: u32, num_partitions: u8) -> Self {
+        Self {
+            parent,
+            size,
+            edges: HashMap::new(),
+            edge_cuts: vec![0; num_partitions as usize],
+        }
+    }
+
+    pub fn add_edge(&mut self, other: u16) {
+        *self.edges.entry(other).or_insert(0) += 1;
+    }
+}
+
 /// Cuttana Partioning State
 pub(crate) struct CuttanaState<T> {
     pub global: PartitionCore<T, u8>,
     pub global_to_sub: HashMap<u8, PartitionCore<T, u16>>,
-    pub sub_partition_graph: Vec<HashMap<u16, u64>>,
-    pub _sub_move_score: Vec<Vec<i32>>, // TODO: Create segment trees
+    pub sub_partitions: Vec<SubPartition>,
     pub sub_in_partition: Vec<u16>,
-    pub sub_to_partition: Vec<u8>,
-    pub sub_edge_cut_by_partition: Vec<Vec<u64>>,
+    pub _sub_move_score: Vec<Vec<i32>>, // TODO: Create segment trees
+}
+
+#[derive(Debug, Clone, Copy)]
+enum UpdateType {
+    Add,
+    Remove,
+    Update,
 }
 
 impl<T> CuttanaState<T>
@@ -119,29 +123,24 @@ where
             );
         }
 
+        let total_sub_partitions = config.num_sub_partitions as u64 * num_partitions as u64;
+        let sub_partitions = (0..total_sub_partitions)
+            .map(|id| {
+                let parent = (id / config.num_sub_partitions as u64) as u8;
+                SubPartition::new(parent, config.num_sub_partitions.into(), num_partitions)
+            })
+            .collect();
+
         Self {
             global,
             global_to_sub,
-            sub_partition_graph: {
-                let total_sub_partitions = config.num_sub_partitions as u64 * num_partitions as u64;
-                vec![HashMap::new(); total_sub_partitions as usize]
-            },
+            sub_partitions,
+            sub_in_partition: vec![config.num_sub_partitions; num_partitions as usize],
             _sub_move_score: vec![vec![0; num_partitions.into()]; num_partitions.into()],
-            sub_in_partition: vec![config.num_sub_partitions; num_partitions.into()],
-            sub_to_partition: {
-                let total_sub_partitions = config.num_sub_partitions as u64 * num_partitions as u64;
-                (0..total_sub_partitions)
-                    .map(|i| (i / config.num_sub_partitions as u64) as u8)
-                    .collect()
-            },
-            sub_edge_cut_by_partition: {
-                let total_sub_partitions = config.num_sub_partitions as u64 * num_partitions as u64;
-                vec![vec![0; num_partitions.into()]; total_sub_partitions as usize]
-            },
         }
     }
 
-    pub fn sub_partition(&mut self, global_partition: u8) -> &mut PartitionCore<T, u16> {
+    pub fn partition(&mut self, global_partition: u8) -> &mut PartitionCore<T, u16> {
         self.global_to_sub
             .get_mut(&global_partition)
             .expect("Global partition does not exist")
@@ -157,8 +156,107 @@ where
             .round() as u64;
 
         for p in 0..self.global.num_partitions {
-            self.sub_partition(p).metrics.vertex_count = v_eff;
-            self.sub_partition(p).metrics.edge_count = e_eff;
+            self.partition(p).metrics.vertex_count = v_eff;
+            self.partition(p).metrics.edge_count = e_eff;
+        }
+    }
+
+    pub fn update_sub_edge_cut_by_partition(&mut self) {
+        let parents: Vec<usize> = self
+            .sub_partitions
+            .iter()
+            .map(|s| s.parent as usize)
+            .collect();
+
+        for i in 0..self.sub_partitions.len() {
+            let sub = &mut self.sub_partitions[i];
+            let edge_cuts = &mut sub.edge_cuts;
+
+            edge_cuts.fill(0);
+            let mut total_cut: u64 = 0;
+
+            // subtract edge weights for the partition of each adjacent sub-partition
+            for (&nbr, &weight) in &sub.edges {
+                total_cut += weight;
+                edge_cuts[parents[nbr as usize]] -= weight;
+            }
+
+            // add total edge cut to all partitions
+            edge_cuts.iter_mut().for_each(|x| *x += total_cut);
+        }
+    }
+
+    pub fn get_sub_partition_graph_edge_weight(&self, src: u16, dst: u16) -> Option<u64> {
+        self.sub_partitions[src as usize].edges.get(&dst).copied()
+    }
+
+    pub fn move_sub_partition(&mut self, sub: u16, from: u8, to: u8) {
+        self.update_move_score_all_partitions(sub, UpdateType::Remove);
+
+        let (sub_idx, from_idx, to_idx) = (sub as usize, from as usize, to as usize);
+
+        let edges: Vec<(usize, u64)> = self.sub_partitions[sub_idx]
+            .edges
+            .iter()
+            .map(|(s, w)| (*s as usize, *w))
+            .collect();
+
+        // Update sub_edge_cut_by_partition using sub.edges
+        for (adj_sub, edge_weight) in edges {
+            let edge_cuts = &mut self.sub_partitions[adj_sub].edge_cuts;
+            edge_cuts[to_idx] += edge_weight;
+            edge_cuts[from_idx] -= edge_weight;
+        }
+
+        // Update partition sizes
+        let sub_size = self.sub_partitions[sub_idx].size;
+        self.global.partition_sizes[from_idx] -= sub_size;
+        self.global.partition_sizes[to_idx] += sub_size;
+
+        // Update assignment and counts
+        self.sub_partitions[sub_idx].parent = to;
+        self.sub_in_partition[from_idx] -= 1;
+        self.sub_in_partition[to_idx] += 1;
+
+        // Build buckets of neighbors grouped by parent
+        let mut buckets = vec![Vec::<u16>::new(); self.global.num_partitions as usize];
+        for &adj_sub in self.sub_partitions[sub_idx].edges.keys() {
+            let parent = self.sub_partitions[adj_sub as usize].parent as usize;
+            buckets[parent].push(adj_sub);
+        }
+
+        // Update move scores
+        for bucket in &buckets {
+            for &adj_sub in bucket {
+                let adj_parent = self.sub_partitions[adj_sub as usize].parent;
+                if adj_parent == from || adj_parent == to {
+                    self.update_move_score_all_partitions(adj_sub, UpdateType::Update);
+                } else {
+                    self.update_move_score(adj_sub, from, UpdateType::Update);
+                    self.update_move_score(adj_sub, to, UpdateType::Update);
+                }
+            }
+        }
+
+        self.update_move_score_all_partitions(sub, UpdateType::Add);
+    }
+
+    fn update_move_score_all_partitions(&mut self, sub: u16, update: UpdateType) {
+        for partition in 0..self.global.num_partitions {
+            self.update_move_score(sub, partition, update);
+        }
+    }
+
+    fn update_move_score(&mut self, sub: u16, adj_partition: u8, update: UpdateType) {
+        let assigned_partition = self.sub_partitions[sub as usize].parent;
+        let edge_cut = &self.sub_partitions[sub as usize].edge_cuts;
+        let _delta = edge_cut[adj_partition as usize] - edge_cut[assigned_partition as usize];
+
+        // TODO: Segment tree updates
+        match update {
+            UpdateType::Add => {}
+            UpdateType::Remove => {}
+            UpdateType::Update => {}
         }
     }
 }
