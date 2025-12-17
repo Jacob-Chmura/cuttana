@@ -92,14 +92,16 @@ pub(crate) struct SubPartition {
     pub parent: u8,
     pub size: u32,
     pub edges: HashMap<u16, u64>,
+    pub edge_cuts: Vec<u64>,
 }
 
 impl SubPartition {
-    pub fn new(parent: u8, size: u32) -> Self {
+    pub fn new(parent: u8, size: u32, num_partitions: u8) -> Self {
         Self {
             parent,
             size,
             edges: HashMap::new(),
+            edge_cuts: vec![0; num_partitions as usize],
         }
     }
 
@@ -114,7 +116,6 @@ pub(crate) struct CuttanaState<T> {
     pub global_to_sub: HashMap<u8, PartitionCore<T, u16>>,
     pub sub_partitions: Vec<SubPartition>,
     pub sub_in_partition: Vec<u16>,
-    pub sub_edge_cut_by_partition: Vec<Vec<u64>>,
     pub _sub_move_score: Vec<Vec<i32>>, // TODO: Create segment trees
 }
 
@@ -149,7 +150,7 @@ where
         let sub_partitions = (0..total_sub_partitions)
             .map(|id| {
                 let parent = (id / config.num_sub_partitions as u64) as u8;
-                SubPartition::new(parent, config.num_sub_partitions.into())
+                SubPartition::new(parent, config.num_sub_partitions.into(), num_partitions)
             })
             .collect();
 
@@ -158,10 +159,6 @@ where
             global_to_sub,
             sub_partitions,
             sub_in_partition: vec![config.num_sub_partitions; num_partitions as usize],
-            sub_edge_cut_by_partition: vec![
-                vec![0; num_partitions.into()];
-                total_sub_partitions as usize
-            ],
             _sub_move_score: vec![vec![0; num_partitions.into()]; num_partitions.into()],
         }
     }
@@ -188,21 +185,27 @@ where
     }
 
     pub fn update_sub_edge_cut_by_partition(&mut self) {
-        for (sub_idx, sub) in self.sub_partitions.iter().enumerate() {
-            let row = &mut self.sub_edge_cut_by_partition[sub_idx];
-            let mut total_cut = 0;
+        let parents: Vec<usize> = self
+            .sub_partitions
+            .iter()
+            .map(|s| s.parent as usize)
+            .collect();
 
-            // subtract edge weights for the partition of each adjacent sub
+        for i in 0..self.sub_partitions.len() {
+            let sub = &mut self.sub_partitions[i];
+            let edge_cuts = &mut sub.edge_cuts;
+
+            edge_cuts.fill(0);
+            let mut total_cut: u64 = 0;
+
+            // subtract edge weights for the partition of each adjacent sub-partition
             for (&nbr, &weight) in &sub.edges {
-                let nbr_parent = self.sub_partitions[nbr as usize].parent as usize;
                 total_cut += weight;
-                row[nbr_parent] = row[nbr_parent].saturating_sub(weight);
+                edge_cuts[parents[nbr as usize]] -= weight;
             }
 
             // add total edge cut to all partitions
-            for val in row.iter_mut() {
-                *val += total_cut;
-            }
+            edge_cuts.iter_mut().for_each(|x| *x += total_cut);
         }
     }
 
@@ -215,10 +218,17 @@ where
 
         let (sub_idx, from_idx, to_idx) = (sub as usize, from as usize, to as usize);
 
+        let edges: Vec<(usize, u64)> = self.sub_partitions[sub_idx]
+            .edges
+            .iter()
+            .map(|(s, w)| (*s as usize, *w))
+            .collect();
+
         // Update sub_edge_cut_by_partition using sub.edges
-        for (adj_sub, edge_weight) in &self.sub_partitions[sub_idx].edges {
-            self.sub_edge_cut_by_partition[*adj_sub as usize][to_idx] += edge_weight;
-            self.sub_edge_cut_by_partition[*adj_sub as usize][from_idx] -= edge_weight;
+        for (adj_sub, edge_weight) in edges {
+            let edge_cuts = &mut self.sub_partitions[adj_sub].edge_cuts;
+            edge_cuts[to_idx] += edge_weight;
+            edge_cuts[from_idx] -= edge_weight;
         }
 
         // Update partition sizes
@@ -262,7 +272,7 @@ where
 
     fn update_move_score(&mut self, sub: u16, adj_partition: u8, update: UpdateType) {
         let assigned_partition = self.sub_partitions[sub as usize].parent;
-        let edge_cut = &self.sub_edge_cut_by_partition[sub as usize];
+        let edge_cut = &self.sub_partitions[sub as usize].edge_cuts;
         let _delta = edge_cut[adj_partition as usize] - edge_cut[assigned_partition as usize];
         //let st_pos = &mut sub_to_segtree_ind[sub][adj_partition];
         match update {
