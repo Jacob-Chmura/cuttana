@@ -1,4 +1,4 @@
-use crate::state::PartitionAssignment;
+use crate::assignment::PartitionAssignment;
 use rand::Rng;
 use rand::rngs::ThreadRng;
 use std::hash::Hash;

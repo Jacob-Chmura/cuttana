@@ -7,7 +7,7 @@ use crate::state::CuttanaState;
 use crate::stream::VertexStream;
 use std::hash::Hash;
 
-pub fn partition<T>(
+pub fn cuttana_partition<T>(
     stream: VertexStream<T>,
     num_partitions: u8,
     config: CuttanaConfig,

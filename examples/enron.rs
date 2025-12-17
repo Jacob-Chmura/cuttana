@@ -1,5 +1,5 @@
 use cuttana::config::CuttanaConfig;
-use cuttana::partition;
+use cuttana::cuttana_partition;
 use cuttana::stream::{Delimiter, VertexStream};
 
 fn main() -> std::io::Result<()> {
@@ -8,7 +8,7 @@ fn main() -> std::io::Result<()> {
 
     let num_partitions = 16;
     let config = CuttanaConfig::default();
-    let result = partition(stream, num_partitions, config);
+    let result = cuttana_partition(stream, num_partitions, config);
 
     println!("Vertices: {}", result.vertex_count);
     println!("Edges: {}", result.edge_count);
