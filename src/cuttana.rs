@@ -31,7 +31,8 @@ where
         state.update_metrics(&v, &nbrs);
 
         if nbrs.len() as u32 >= config.buffer_degree_threshold {
-            partitioner.partition(&v, &nbrs, &mut state, &mut buffer);
+            partitioner.partition(&v, &nbrs, &mut state);
+            buffer.update_scores(&nbrs, &state);
         } else {
             buffer.insert(&v, &nbrs, &state);
         }
@@ -39,12 +40,14 @@ where
         if buffer.is_at_capacity()
             && let Some((v, nbrs)) = buffer.evict()
         {
-            partitioner.partition(&v, &nbrs, &mut state, &mut buffer);
+            partitioner.partition(&v, &nbrs, &mut state);
+            buffer.update_scores(&nbrs, &state);
         }
     }
 
     while let Some((v, nbrs)) = buffer.evict() {
-        partitioner.partition(&v, &nbrs, &mut state, &mut buffer);
+        partitioner.partition(&v, &nbrs, &mut state);
+        buffer.update_scores(&nbrs, &state);
     }
 
     state.compute_sub_partition_edge_cuts();

@@ -1,5 +1,4 @@
 use crate::assignment::PartitionAssignment;
-use crate::buffer::{BufferManager, BufferScorer};
 use crate::state::CuttanaState;
 use rand::Rng;
 use rand::rngs::ThreadRng;
@@ -21,12 +20,11 @@ where
         Self { scorer, sub_scorer }
     }
 
-    pub fn partition<T: Eq + Hash + Clone + Ord, S: BufferScorer>(
+    pub fn partition<T: Eq + Hash + Clone>(
         &mut self,
         v: &T,
         nbrs: &[T],
         state: &mut CuttanaState<T>,
-        buffer: &mut BufferManager<T, S>,
     ) {
         if !state.global_assignments.has_room() {
             // TODO: Return result and graceful handle
@@ -41,7 +39,6 @@ where
             .assign_partition(v.clone(), best_partition);
 
         for nbr in nbrs {
-            buffer.update_score(nbr, state);
             if let Some(nbr_partition) = state.global_assignments.partition_of(nbr)
                 && nbr_partition != best_partition
             {
