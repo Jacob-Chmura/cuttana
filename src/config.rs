@@ -11,6 +11,7 @@ pub struct CuttanaConfig {
 }
 
 impl CuttanaConfig {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         num_sub_partitions: u16,
         balance_slack: f64,

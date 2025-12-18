@@ -1,14 +1,70 @@
-use crate::state::PartitionCore;
+use crate::assignment::PartitionAssignment;
+use crate::state::CuttanaState;
 use rand::Rng;
 use rand::rngs::ThreadRng;
 use std::hash::Hash;
+
+pub(crate) struct Partitioner<C>
+where
+    C: PartitionScorer,
+{
+    scorer: C,
+    sub_scorer: C,
+}
+
+impl<C> Partitioner<C>
+where
+    C: PartitionScorer,
+{
+    pub fn new(scorer: C, sub_scorer: C) -> Self {
+        Self { scorer, sub_scorer }
+    }
+
+    pub fn partition<T: Eq + Hash + Clone>(
+        &mut self,
+        v: &T,
+        nbrs: &[T],
+        state: &mut CuttanaState<T>,
+    ) {
+        if !state.global_assignments.has_room() {
+            // TODO: Return result and graceful handle
+            panic!("Partition capacity exceeded. Increase balance_slack or num_partitions.");
+        }
+
+        let global = &mut state.global_assignments;
+        let best_partition = self.scorer.find_best_partition(v, nbrs, global);
+        global.assign_partition(v.clone(), best_partition);
+
+        for nbr in nbrs {
+            if let Some(nbr_partition) = state.global_assignments.partition_of(nbr)
+                && nbr_partition != best_partition
+            {
+                state.global_assignments.metrics.cut_count += 1;
+            }
+        }
+
+        let local = &mut state.local_assignment_for(best_partition);
+        let best_sub_partition = self.sub_scorer.find_best_partition(v, nbrs, local);
+        local.assign_partition(v.clone(), best_sub_partition);
+
+        for nbr in nbrs {
+            if let Some(nbr_sub_partition) =
+                state.local_assignment_for(best_partition).partition_of(nbr)
+                && nbr_sub_partition != best_sub_partition
+            {
+                state.sub_partitions[best_sub_partition as usize].add_edge(nbr_sub_partition);
+                state.sub_partitions[nbr_sub_partition as usize].add_edge(best_sub_partition);
+            }
+        }
+    }
+}
 
 pub(crate) trait PartitionScorer {
     fn find_best_partition<T: Eq + Hash + Clone, P: Copy + Into<usize> + TryFrom<usize>>(
         &mut self,
         v: &T,
         nbrs: &[T],
-        core: &PartitionCore<T, P>,
+        core: &PartitionAssignment<T, P>,
     ) -> P;
 }
 
@@ -27,11 +83,11 @@ impl CuttanaPartitionScorer {
 
     fn compute_score<T, P: Copy + Into<usize>>(
         &self,
-        core: &PartitionCore<T, P>,
+        core: &PartitionAssignment<T, P>,
         partition: P,
     ) -> f64 {
         let partition_size = core.partition_sizes[partition.into()] as f64;
-        let num_partitions = core.num_partitions.into() as f64;
+        let num_partitions = core.num_partitions as f64;
         let vertex_count = core.metrics.vertex_count as f64;
         let edge_count = core.metrics.edge_count as f64;
 
@@ -46,7 +102,7 @@ impl PartitionScorer for CuttanaPartitionScorer {
         &mut self,
         _v: &T,
         nbrs: &[T],
-        core: &PartitionCore<T, P>,
+        core: &PartitionAssignment<T, P>,
     ) -> P {
         // First candidate is just smallest partition
         let mut best_partition = core.smallest_partition();

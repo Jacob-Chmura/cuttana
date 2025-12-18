@@ -60,6 +60,12 @@ where
         None
     }
 
+    pub fn update_scores(&mut self, nbrs: &[T], state: &CuttanaState<T>) {
+        for nbr in nbrs {
+            self.update_score(nbr, state);
+        }
+    }
+
     pub fn update_score(&mut self, v: &T, state: &CuttanaState<T>) {
         let old_score = match self.map.get(v).copied() {
             Some(s) => s,
@@ -145,7 +151,7 @@ impl BufferScorer for CuttanaBufferScorer {
         let degree = nbrs.len() as f64;
         let num_nbrs_partitioned = nbrs
             .iter()
-            .filter(|nbr| state.global.partition_of(nbr).is_some())
+            .filter(|nbr| state.global_assignments.partition_of(nbr).is_some())
             .count() as f64;
 
         self.theta * (num_nbrs_partitioned / degree) + (degree / self.buffer_deg_threshold)
