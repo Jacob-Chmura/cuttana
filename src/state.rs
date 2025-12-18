@@ -36,7 +36,7 @@ impl SubPartitionInfo {
         *self.edges.entry(other).or_insert(0) += 1;
     }
 
-    pub fn get_edge(&mut self, other: u16) -> u64 {
+    pub fn get_edge(&self, other: u16) -> u64 {
         self.edges.get(&other).copied().unwrap_or(0)
     }
 }
@@ -47,13 +47,6 @@ pub(crate) struct CuttanaState<T> {
     pub local_assignments: HashMap<u8, PartitionAssignment<T, u16>>,
     pub partitions: Vec<PartitionInfo>,
     pub sub_partitions: Vec<SubPartitionInfo>,
-}
-
-#[derive(Debug, Clone, Copy)]
-enum UpdateType {
-    Add,
-    Remove,
-    Update,
 }
 
 impl<T> CuttanaState<T>
@@ -141,76 +134,6 @@ where
 
             // add total edge cut to all partitions
             edge_cuts.iter_mut().for_each(|x| *x += total_cut);
-        }
-    }
-
-    pub fn move_sub_partition(&mut self, sub: u16, from: u8, to: u8) {
-        self.update_move_score_all_partitions(sub, UpdateType::Remove);
-
-        let (sub_idx, from_idx, to_idx) = (sub as usize, from as usize, to as usize);
-
-        let edges: Vec<(usize, u64)> = self.sub_partitions[sub_idx]
-            .edges
-            .iter()
-            .map(|(s, w)| (*s as usize, *w))
-            .collect();
-
-        // Update sub_edge_cut_by_partition using sub.edges
-        for (adj_sub, edge_weight) in edges {
-            let edge_cuts = &mut self.sub_partitions[adj_sub].edge_cuts;
-            edge_cuts[to_idx] += edge_weight;
-            edge_cuts[from_idx] -= edge_weight;
-        }
-
-        // Update partition sizes
-        let sub_size = self.local_assignment_for(from).partition_sizes[sub_idx];
-        self.global_assignments.partition_sizes[from_idx] -= sub_size;
-        self.global_assignments.partition_sizes[to_idx] += sub_size;
-
-        // Update assignment and counts
-        self.sub_partitions[sub_idx].parent = to;
-        self.partitions[from_idx].num_sub -= 1;
-        self.partitions[to_idx].num_sub += 1;
-
-        // Build buckets of neighbors grouped by parent
-        let mut buckets = vec![Vec::<u16>::new(); self.num_partitions()];
-        for &adj_sub in self.sub_partitions[sub_idx].edges.keys() {
-            let parent = self.sub_partitions[adj_sub as usize].parent as usize;
-            buckets[parent].push(adj_sub);
-        }
-
-        // Update move scores
-        for bucket in &buckets {
-            for &adj_sub in bucket {
-                let adj_parent = self.sub_partitions[adj_sub as usize].parent;
-                if adj_parent == from || adj_parent == to {
-                    self.update_move_score_all_partitions(adj_sub, UpdateType::Update);
-                } else {
-                    self.update_move_score(adj_sub, from, UpdateType::Update);
-                    self.update_move_score(adj_sub, to, UpdateType::Update);
-                }
-            }
-        }
-
-        self.update_move_score_all_partitions(sub, UpdateType::Add);
-    }
-
-    fn update_move_score_all_partitions(&mut self, sub: u16, update: UpdateType) {
-        for partition in 0..self.num_partitions() {
-            self.update_move_score(sub, partition as u8, update);
-        }
-    }
-
-    fn update_move_score(&mut self, sub: u16, adj_partition: u8, update: UpdateType) {
-        let assigned_partition = self.sub_partitions[sub as usize].parent;
-        let edge_cut = &self.sub_partitions[sub as usize].edge_cuts;
-        let _delta = edge_cut[adj_partition as usize] - edge_cut[assigned_partition as usize];
-
-        // TODO: Segment tree updates
-        match update {
-            UpdateType::Add => {}
-            UpdateType::Remove => {}
-            UpdateType::Update => {}
         }
     }
 }
