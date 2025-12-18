@@ -61,12 +61,12 @@ where
         let total_sub_partitions = num_sub_partitions as u64 * num_partitions as u64;
 
         Self {
-            global_assignments: PartitionAssignment::new(num_partitions, balance_slack),
+            global_assignments: PartitionAssignment::new(num_partitions as usize, balance_slack),
             local_assignments: (0..num_partitions)
                 .map(|g| {
                     (
                         g,
-                        PartitionAssignment::new(num_sub_partitions, balance_slack),
+                        PartitionAssignment::new(num_sub_partitions as usize, balance_slack),
                     )
                 })
                 .collect(),

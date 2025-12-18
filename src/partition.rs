@@ -95,7 +95,7 @@ impl CuttanaPartitionScorer {
         partition: P,
     ) -> f64 {
         let partition_size = core.partition_sizes[partition.into()] as f64;
-        let num_partitions = core.num_partitions.into() as f64;
+        let num_partitions = core.num_partitions as f64;
         let vertex_count = core.metrics.vertex_count as f64;
         let edge_count = core.metrics.edge_count as f64;
 

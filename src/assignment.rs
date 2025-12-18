@@ -6,7 +6,7 @@ use std::hash::Hash;
 pub(crate) struct PartitionAssignment<T, P> {
     pub assignments: HashMap<T, P>, // vertex -> partition id
     pub partition_sizes: Vec<u32>,
-    pub num_partitions: P,
+    pub num_partitions: usize,
     pub metrics: PartitionMetrics,
     balance_slack: f64,
 }
@@ -16,10 +16,10 @@ where
     T: Eq + Hash,
     P: Copy + Into<usize> + TryFrom<usize>,
 {
-    pub fn new(num_partitions: P, balance_slack: f64) -> Self {
+    pub fn new(num_partitions: usize, balance_slack: f64) -> Self {
         Self {
             assignments: HashMap::new(),
-            partition_sizes: vec![0; num_partitions.into()],
+            partition_sizes: vec![0; num_partitions],
             num_partitions,
             balance_slack,
             metrics: PartitionMetrics::default(),
@@ -37,7 +37,7 @@ where
     }
 
     pub fn has_room_in_partition(&self, p: P) -> bool {
-        let threshold = self.metrics.vertex_count as f64 / self.num_partitions.into() as f64;
+        let threshold = self.metrics.vertex_count as f64 / self.num_partitions as f64;
         (self.partition_sizes[p.into()] as f64) < (1.0 + self.balance_slack) * threshold
     }
 
