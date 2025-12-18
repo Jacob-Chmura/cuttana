@@ -1,4 +1,3 @@
-use crate::metrics::PartitionMetrics;
 use std::collections::HashMap;
 use std::hash::Hash;
 
@@ -22,7 +21,7 @@ where
             partition_sizes: vec![0; num_partitions],
             num_partitions,
             balance_slack,
-            metrics: PartitionMetrics::default(),
+            metrics: PartitionMetrics::new(num_partitions),
         }
     }
 
@@ -61,5 +60,41 @@ where
             .unwrap()
             .0;
         P::try_from(idx).ok().expect("Partition index overflow")
+    }
+}
+
+/// Partition quality metrics collected during partitioning
+#[derive(Debug, Clone)]
+pub(crate) struct PartitionMetrics {
+    pub vertex_count: u64,
+    pub edge_count: u64,
+    pub cut_count: u64,
+    num_partitions: usize,
+}
+
+impl PartitionMetrics {
+    pub fn new(num_partitions: usize) -> Self {
+        assert!(num_partitions > 0, "Number of partitions must be > 0");
+
+        Self {
+            vertex_count: 0,
+            edge_count: 0,
+            cut_count: 0,
+            num_partitions,
+        }
+    }
+
+    pub fn edge_cut_ratio(&self) -> f64 {
+        if self.edge_count == 0 {
+            return 0.0;
+        }
+        self.cut_count as f64 / self.edge_count as f64
+    }
+
+    pub fn communication_volume(&self) -> f64 {
+        if self.vertex_count == 0 {
+            return 0.0;
+        }
+        self.cut_count as f64 / (self.num_partitions as u64 * self.vertex_count) as f64
     }
 }
