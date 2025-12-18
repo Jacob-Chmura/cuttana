@@ -1,7 +1,7 @@
 use crate::buffer::{BufferManager, CuttanaBufferScorer};
 use crate::config::CuttanaConfig;
 use crate::partition::{CuttanaPartitionScorer, Partitioner};
-use crate::refine::{fix_balance, run_refinement};
+use crate::refine::Refiner;
 use crate::result::PartitionResult;
 use crate::state::CuttanaState;
 use crate::stream::VertexStream;
@@ -50,16 +50,10 @@ where
         buffer.update_scores(&nbrs, &state);
     }
 
-    state.compute_sub_partition_edge_cuts();
-
-    let num_vertices = state.global_assignments.metrics.vertex_count as f64;
-    let max_parent =
-        (num_vertices / num_partitions as f64 * (1.0 + config.balance_slack)) as u64 + 1;
-    let max_sub = (config.num_sub_partitions as f64 / num_partitions as f64 * 1.5) as u64 + 1;
-
-    fix_balance(&mut state, max_parent, max_sub);
-    run_refinement(&mut state, max_parent, max_sub, config.info_gain_threshold);
-    fix_balance(&mut state, max_parent, max_sub);
+    let refiner = Refiner::new(&mut state, config.balance_slack, config.info_gain_threshold);
+    refiner.fix_balance(&mut state);
+    refiner.refine(&mut state);
+    refiner.fix_balance(&mut state);
 
     PartitionResult::from_state(state)
 }
