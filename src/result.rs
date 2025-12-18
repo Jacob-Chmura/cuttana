@@ -1,21 +1,17 @@
 use crate::state::CuttanaState;
 use std::collections::HashMap;
-use std::hash::Hash;
 
 /// Final output of the partitioning algorithm.
 pub struct PartitionResult<T> {
     pub assignments: HashMap<T, u8>,
-    pub partition_sizes: Vec<u32>,
+    pub partition_sizes: Vec<usize>,
     pub vertex_count: u64,
     pub edge_count: u64,
     pub edge_cut_ratio: f64,
     pub communication_volume: f64,
 }
 
-impl<T> PartitionResult<T>
-where
-    T: Hash + Clone + Eq,
-{
+impl<T> PartitionResult<T> {
     pub(crate) fn from_state(state: CuttanaState<T>) -> Self {
         Self {
             assignments: state.global_assignments.assignments,

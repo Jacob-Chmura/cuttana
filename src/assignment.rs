@@ -4,7 +4,7 @@ use std::hash::Hash;
 /// Tracks vertex-based partition assignment output from a graph partioner
 pub(crate) struct PartitionAssignment<T, P> {
     pub assignments: HashMap<T, P>, // vertex -> partition id
-    pub partition_sizes: Vec<u32>,
+    pub partition_sizes: Vec<usize>,
     pub num_partitions: usize,
     pub metrics: PartitionMetrics,
     balance_slack: f64,

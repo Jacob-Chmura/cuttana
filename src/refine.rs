@@ -38,7 +38,7 @@ pub(crate) struct Refiner {
 }
 
 impl Refiner {
-    pub fn new<T: Hash + Ord>(
+    pub fn new<T: Hash + Eq>(
         state: &mut CuttanaState<T>,
         balance_slack: f64,
         gain_threshold: u64,
@@ -58,7 +58,7 @@ impl Refiner {
         }
     }
 
-    pub fn fix_balance<T: Hash + Ord>(&self, state: &mut CuttanaState<T>) {
+    pub fn fix_balance<T: Hash + Eq>(&self, state: &mut CuttanaState<T>) {
         while let Some(plan) = self.find_best_balance_plan(state) {
             for m in plan.moves {
                 move_sub_partition(state, m.sub, m.from, m.to);
@@ -66,7 +66,7 @@ impl Refiner {
         }
     }
 
-    pub fn refine<T: Hash + Ord>(&self, state: &mut CuttanaState<T>) {
+    pub fn refine<T: Hash + Eq>(&self, state: &mut CuttanaState<T>) {
         while let Some(plan) = self.find_best_refine_plan(state) {
             if plan.score > self.gain_threshold {
                 break;
@@ -77,7 +77,7 @@ impl Refiner {
         }
     }
 
-    fn find_best_balance_plan<T: Hash + Ord>(&self, state: &CuttanaState<T>) -> Option<MovePlan> {
+    fn find_best_balance_plan<T: Hash + Eq>(&self, state: &CuttanaState<T>) -> Option<MovePlan> {
         let mut best: Option<MovePlan> = None;
 
         for from_idx in 0..state.num_partitions() {
@@ -108,7 +108,7 @@ impl Refiner {
         best
     }
 
-    fn find_best_refine_plan<T: Hash + Ord>(&self, state: &CuttanaState<T>) -> Option<MovePlan> {
+    fn find_best_refine_plan<T: Hash + Eq>(&self, state: &CuttanaState<T>) -> Option<MovePlan> {
         let mut best: Option<MovePlan> = None;
 
         for from_idx in 0..state.num_partitions() {
@@ -166,31 +166,23 @@ impl Refiner {
         best
     }
 
-    fn partition_at_vertex_capacity<T: Hash + Ord>(
-        &self,
-        state: &CuttanaState<T>,
-        p: usize,
-    ) -> bool {
+    fn partition_at_vertex_capacity<T: Hash>(&self, state: &CuttanaState<T>, p: usize) -> bool {
         state.global_assignments.partition_sizes[p] as u64 >= self.max_parent
     }
 
-    fn partition_within_vertex_capacity<T: Hash + Ord>(
-        &self,
-        state: &CuttanaState<T>,
-        p: usize,
-    ) -> bool {
+    fn partition_within_vertex_capacity<T: Hash>(&self, state: &CuttanaState<T>, p: usize) -> bool {
         state.global_assignments.partition_sizes[p] as u64 <= self.max_parent
     }
 
-    fn partition_at_sub_capacity<T: Hash + Ord>(&self, state: &CuttanaState<T>, p: usize) -> bool {
+    fn partition_at_sub_capacity<T: Hash>(&self, state: &CuttanaState<T>, p: usize) -> bool {
         state.partitions[p].num_sub as u64 >= self.max_sub
     }
 
-    fn partition_is_empty<T: Hash + Ord>(&self, state: &CuttanaState<T>, p: usize) -> bool {
+    fn partition_is_empty<T: Hash>(&self, state: &CuttanaState<T>, p: usize) -> bool {
         state.global_assignments.partition_sizes[p] == 0
     }
 
-    fn sub_fits_in_partition<T: Hash + Ord>(
+    fn sub_fits_in_partition<T: Hash>(
         &self,
         state: &CuttanaState<T>,
         parent: u8,
@@ -204,7 +196,7 @@ impl Refiner {
     }
 }
 
-fn move_sub_partition<T: Hash + Ord>(state: &mut CuttanaState<T>, sub: u16, from: u8, to: u8) {
+fn move_sub_partition<T: Hash + Eq>(state: &mut CuttanaState<T>, sub: u16, from: u8, to: u8) {
     update_move_score_all_partitions(state, sub, UpdateType::Remove);
 
     let (sub_idx, from_idx, to_idx) = (sub as usize, from as usize, to as usize);
@@ -255,7 +247,7 @@ fn move_sub_partition<T: Hash + Ord>(state: &mut CuttanaState<T>, sub: u16, from
     update_move_score_all_partitions(state, sub, UpdateType::Add);
 }
 
-fn update_move_score_all_partitions<T: Hash + Ord>(
+fn update_move_score_all_partitions<T: Hash + Eq>(
     state: &mut CuttanaState<T>,
     sub: u16,
     update: UpdateType,
@@ -265,7 +257,7 @@ fn update_move_score_all_partitions<T: Hash + Ord>(
     }
 }
 
-fn update_move_score<T: Hash + Ord>(
+fn update_move_score<T: Hash + Eq>(
     state: &mut CuttanaState<T>,
     sub: u16,
     adj_partition: u8,
