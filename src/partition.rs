@@ -31,12 +31,9 @@ where
             panic!("Partition capacity exceeded. Increase balance_slack or num_partitions.");
         }
 
-        let best_partition = self
-            .scorer
-            .find_best_partition(v, nbrs, &state.global_assignments);
-        state
-            .global_assignments
-            .assign_partition(v.clone(), best_partition);
+        let global = &mut state.global_assignments;
+        let best_partition = self.scorer.find_best_partition(v, nbrs, global);
+        global.assign_partition(v.clone(), best_partition);
 
         for nbr in nbrs {
             if let Some(nbr_partition) = state.global_assignments.partition_of(nbr)
@@ -46,14 +43,9 @@ where
             }
         }
 
-        let best_sub_partition: u16 = self.sub_scorer.find_best_partition(
-            v,
-            nbrs,
-            state.local_assignment_for(best_partition),
-        );
-        state
-            .local_assignment_for(best_partition)
-            .assign_partition(v.clone(), best_sub_partition);
+        let local = &mut state.local_assignment_for(best_partition);
+        let best_sub_partition = self.sub_scorer.find_best_partition(v, nbrs, local);
+        local.assign_partition(v.clone(), best_sub_partition);
 
         for nbr in nbrs {
             if let Some(nbr_sub_partition) =
