@@ -42,6 +42,15 @@ impl Refiner {
         let max_sub =
             (state.num_sub_partitions() as f64 / state.num_partitions() as f64 * 1.5) as u64 + 1;
 
+        println!(
+            "Num vertices: {}, num_part: {}, num_sub_part: {}, max_parent: {}, max_sub: {}",
+            num_vertices,
+            state.num_partitions(),
+            state.num_sub_partitions(),
+            max_parent,
+            max_sub
+        );
+
         Self {
             gain_threshold,
             max_parent,
@@ -53,26 +62,23 @@ impl Refiner {
         loop {
             let mut best_move: Option<SubPartitionMove> = None;
 
-            for (from_idx, &from_size) in
-                state.global_assignments.partition_sizes.iter().enumerate()
-            {
-                if from_size as u64 <= self.max_parent {
+            for from_idx in 0..state.num_partitions() {
+                if self.partition_within_vertex_capacity(state, from_idx) {
                     continue;
                 }
-                let from = from_idx as u8;
 
-                for (to_idx, &to_size) in
-                    state.global_assignments.partition_sizes.iter().enumerate()
-                {
-                    if to_size as u64 >= self.max_parent
-                        || state.partitions[to_idx].num_sub as u64 >= self.max_sub
+                for to_idx in 0..state.num_partitions() {
+                    if self.partition_at_vertex_capacity(state, to_idx)
+                        || self.partition_at_sub_capacity(state, to_idx)
                     {
                         continue;
                     }
 
-                    let to = to_idx as u8;
+                    let (from, to) = (from_idx as u8, to_idx as u8);
                     let (score, sub) = (u64::MAX, 0u16); // move_score[p_u][p_v].get_min();
                     let sub_size = state.local_assignments[&from].partition_sizes[sub as usize];
+                    let to_size = state.global_assignments.partition_sizes[to_idx];
+
                     if (to_size + sub_size) as u64 > self.max_parent {
                         continue;
                     }
@@ -97,20 +103,19 @@ impl Refiner {
         loop {
             let mut moves: Option<(u64, Vec<SubPartitionMove>)> = None;
 
-            for (from_idx, &from_size) in
-                state.global_assignments.partition_sizes.iter().enumerate()
-            {
-                for (to_idx, &to_size) in
-                    state.global_assignments.partition_sizes.iter().enumerate()
-                {
-                    let sub_in_to_partition = state.partitions[to_idx].num_sub as u64;
-                    if from_size == 0 || from_idx == to_idx || sub_in_to_partition >= self.max_sub {
+            for from_idx in 0..state.num_partitions() {
+                for to_idx in 0..state.num_partitions() {
+                    if from_idx == to_idx
+                        || state.global_assignments.partition_sizes[from_idx] == 0
+                        || self.partition_at_sub_capacity(state, to_idx)
+                    {
                         continue;
                     }
 
                     let (from, to) = (from_idx as u8, to_idx as u8);
                     let (score, sub) = (u64::MAX, 0u16); // move_score[p_u][p_v].get_min()
                     let sub_size = state.local_assignments[&from].partition_sizes[sub as usize];
+                    let to_size = state.global_assignments.partition_sizes[to_idx];
 
                     // Case 1: Direct move fits
                     if (to_size + sub_size) as u64 <= refine_capacity {
@@ -121,29 +126,29 @@ impl Refiner {
                     }
                     // Case 2: Try secondary move (evict a sub partition out of to)
                     else {
-                        for (evict_idx, _) in
-                            state.global_assignments.partition_sizes.iter().enumerate()
-                        {
-                            let sub_in_evict_partition = state.partitions[evict_idx].num_sub as u64;
-                            if to_idx == evict_idx || sub_in_evict_partition >= self.max_sub {
+                        for evict_idx in 0..state.num_partitions() {
+                            if to_idx == evict_idx
+                                || self.partition_at_sub_capacity(state, evict_idx)
+                            {
                                 continue;
                             }
 
-                            let evict = evict_idx as u8;
-                            let (score_2, sub_2) = (u64::MAX, 0u16); // move_score[p_v][p_w].get_min();
-                            let mut score_3 = score + score_2;
-                            score_3 += state.sub_partitions[sub as usize].get_edge(sub_2);
+                            let (score_2, sub_2) = (0u64, 0u16); // move_score[p_v][p_w].get_min();
+                            let effective_score = score
+                                + score_2
+                                + state.sub_partitions[sub as usize].get_edge(sub_2)
+                                + if from_idx == evict_idx {
+                                    state.sub_partitions[sub_2 as usize].get_edge(sub)
+                                } else {
+                                    0
+                                };
 
-                            if from_idx == evict_idx {
-                                score_3 += state.sub_partitions[sub_2 as usize].get_edge(sub);
-                            }
-
-                            if moves.as_ref().is_none_or(|m| score_3 < m.0) {
+                            if moves.as_ref().is_none_or(|m| effective_score < m.0) {
                                 moves = Some((
-                                    score_3,
+                                    effective_score,
                                     vec![
                                         SubPartitionMove::new(score, sub, from, to),
-                                        SubPartitionMove::new(score_2, sub_2, to, evict),
+                                        SubPartitionMove::new(score_2, sub_2, to, evict_idx as u8),
                                     ],
                                 ))
                             }
@@ -161,5 +166,29 @@ impl Refiner {
                 state.move_sub_partition(m.sub, m.from, m.to);
             }
         }
+    }
+
+    fn partition_at_vertex_capacity<T: Hash + Ord>(
+        &self,
+        state: &CuttanaState<T>,
+        p_idx: usize,
+    ) -> bool {
+        state.global_assignments.partition_sizes[p_idx] as u64 >= self.max_parent
+    }
+
+    fn partition_within_vertex_capacity<T: Hash + Ord>(
+        &self,
+        state: &CuttanaState<T>,
+        p_idx: usize,
+    ) -> bool {
+        state.global_assignments.partition_sizes[p_idx] as u64 <= self.max_parent
+    }
+
+    fn partition_at_sub_capacity<T: Hash + Ord>(
+        &self,
+        state: &CuttanaState<T>,
+        p_idx: usize,
+    ) -> bool {
+        state.partitions[p_idx].num_sub as u64 >= self.max_sub
     }
 }
