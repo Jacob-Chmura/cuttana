@@ -60,7 +60,7 @@ where
 }
 
 pub(crate) trait PartitionScorer {
-    fn find_best_partition<T: Eq + Hash + Clone, P: Copy + Into<usize> + TryFrom<usize>>(
+    fn find_best_partition<T: Eq + Hash, P: Copy + Into<usize> + TryFrom<usize>>(
         &mut self,
         v: &T,
         nbrs: &[T],
@@ -81,7 +81,7 @@ impl CuttanaPartitionScorer {
         }
     }
 
-    fn compute_score<T, P: Copy + Into<usize>>(
+    fn compute_score<T, P: Into<usize>>(
         &self,
         core: &PartitionAssignment<T, P>,
         partition: P,
@@ -90,7 +90,6 @@ impl CuttanaPartitionScorer {
         let num_partitions = core.num_partitions as f64;
         let vertex_count = core.metrics.vertex_count as f64;
         let edge_count = core.metrics.edge_count as f64;
-
         let alpha =
             num_partitions.powf(self.gamma - 1.0) * vertex_count / edge_count.powf(self.gamma);
         alpha * self.gamma * partition_size.powf(self.gamma - 1.0)
@@ -98,7 +97,7 @@ impl CuttanaPartitionScorer {
 }
 
 impl PartitionScorer for CuttanaPartitionScorer {
-    fn find_best_partition<T: Eq + Hash + Clone, P: Copy + Into<usize> + TryFrom<usize>>(
+    fn find_best_partition<T: Eq + Hash, P: Copy + Into<usize> + TryFrom<usize>>(
         &mut self,
         _v: &T,
         nbrs: &[T],

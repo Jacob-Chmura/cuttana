@@ -81,7 +81,9 @@ where
                 .collect(),
         }
     }
+}
 
+impl<T> CuttanaState<T> {
     #[inline]
     pub fn num_partitions(&self) -> usize {
         self.partitions.len()
