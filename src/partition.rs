@@ -1,7 +1,74 @@
 use crate::assignment::PartitionAssignment;
+use crate::buffer::{BufferManager, BufferScorer};
+use crate::state::CuttanaState;
 use rand::Rng;
 use rand::rngs::ThreadRng;
 use std::hash::Hash;
+
+pub(crate) struct Partitioner<C>
+where
+    C: PartitionScorer,
+{
+    scorer: C,
+    sub_scorer: C,
+}
+
+impl<C> Partitioner<C>
+where
+    C: PartitionScorer,
+{
+    pub fn new(scorer: C, sub_scorer: C) -> Self {
+        Self { scorer, sub_scorer }
+    }
+
+    pub fn partition<T: Eq + Hash + Clone + Ord, S: BufferScorer>(
+        &mut self,
+        v: &T,
+        nbrs: &[T],
+        state: &mut CuttanaState<T>,
+        buffer: &mut BufferManager<T, S>,
+    ) {
+        if !state.global_assignments.has_room() {
+            // TODO: Return result and graceful handle
+            panic!("Partition capacity exceeded. Increase balance_slack or num_partitions.");
+        }
+
+        let best_partition = self
+            .scorer
+            .find_best_partition(v, nbrs, &state.global_assignments);
+        state
+            .global_assignments
+            .assign_partition(v.clone(), best_partition);
+
+        for nbr in nbrs {
+            buffer.update_score(nbr, state);
+            if let Some(nbr_partition) = state.global_assignments.partition_of(nbr)
+                && nbr_partition != best_partition
+            {
+                state.global_assignments.metrics.cut_count += 1;
+            }
+        }
+
+        let best_sub_partition: u16 = self.sub_scorer.find_best_partition(
+            v,
+            nbrs,
+            state.local_assignment_for(best_partition),
+        );
+        state
+            .local_assignment_for(best_partition)
+            .assign_partition(v.clone(), best_sub_partition);
+
+        for nbr in nbrs {
+            if let Some(nbr_sub_partition) =
+                state.local_assignment_for(best_partition).partition_of(nbr)
+                && nbr_sub_partition != best_sub_partition
+            {
+                state.sub_partitions[best_sub_partition as usize].add_edge(nbr_sub_partition);
+                state.sub_partitions[nbr_sub_partition as usize].add_edge(best_sub_partition);
+            }
+        }
+    }
+}
 
 pub(crate) trait PartitionScorer {
     fn find_best_partition<T: Eq + Hash + Clone, P: Copy + Into<usize> + TryFrom<usize>>(

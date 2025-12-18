@@ -35,6 +35,10 @@ impl SubPartitionInfo {
     pub fn add_edge(&mut self, other: u16) {
         *self.edges.entry(other).or_insert(0) += 1;
     }
+
+    pub fn get_edge(&mut self, other: u16) -> u64 {
+        self.edges.get(&other).copied().unwrap_or(0)
+    }
 }
 
 /// Cuttana Partioning State
@@ -57,8 +61,7 @@ where
     T: Eq + Hash,
 {
     pub fn new(num_partitions: u8, config: &CuttanaConfig) -> Self {
-        // Adding extra slack for `Phase 1` of the algorithm, letting `Phase 2` use the
-        // user-specified slack parameter. E.g. see:
+        // Adding extra slack for `Phase 1` of the algorithm. E.g. see:
         // https://github.com/cuttana/cuttana-partitioner/blob/ed0c18251273a41792c1fc3e909d4ced44beaa27/partitioners/ogpart_single_thread.cpp#L167
         let balance_slack = (config.balance_slack * 2.0).min(config.balance_slack + 0.5);
         let num_sub_partitions = config.num_sub_partitions;
@@ -105,7 +108,7 @@ where
         }
     }
 
-    pub fn update_sub_edge_cut_by_partition(&mut self) {
+    pub fn compute_sub_partition_edge_cuts(&mut self) {
         let parents: Vec<usize> = self
             .sub_partitions
             .iter()
@@ -128,10 +131,6 @@ where
             // add total edge cut to all partitions
             edge_cuts.iter_mut().for_each(|x| *x += total_cut);
         }
-    }
-
-    pub fn get_sub_partition_graph_edge_weight(&self, src: u16, dst: u16) -> Option<u64> {
-        self.sub_partitions[src as usize].edges.get(&dst).copied()
     }
 
     pub fn move_sub_partition(&mut self, sub: u16, from: u8, to: u8) {

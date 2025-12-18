@@ -8,6 +8,6 @@ pub use cuttana::cuttana_partition;
 pub(crate) mod assignment;
 pub(crate) mod buffer;
 pub(crate) mod metrics;
+pub(crate) mod partition;
 pub(crate) mod refine;
-pub(crate) mod scorer;
 pub(crate) mod state;

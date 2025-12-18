@@ -66,14 +66,10 @@ pub(crate) fn run_refinement<T>(
                         let evict = evict_idx as u8;
                         let (score_2, sub_2) = (u64::MAX, 0u16); // move_score[p_v][p_w].get_min();
                         let mut score_3 = score + score_2;
-                        score_3 += state
-                            .get_sub_partition_graph_edge_weight(sub, sub_2)
-                            .unwrap_or(0);
+                        score_3 += state.sub_partitions[sub as usize].get_edge(sub_2);
 
                         if from_idx == evict_idx {
-                            score_3 += state
-                                .get_sub_partition_graph_edge_weight(sub_2, sub)
-                                .unwrap_or(0)
+                            score_3 += state.sub_partitions[sub_2 as usize].get_edge(sub);
                         }
 
                         if moves.as_ref().is_none_or(|m| score_3 < m.0) {
