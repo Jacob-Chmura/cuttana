@@ -21,7 +21,7 @@ where
             partition_sizes: vec![0; num_partitions],
             num_partitions,
             balance_slack,
-            metrics: PartitionMetrics::default(),
+            metrics: PartitionMetrics::new(num_partitions),
         }
     }
 
@@ -64,14 +64,26 @@ where
 }
 
 /// Partition quality metrics collected during partitioning
-#[derive(Default, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub(crate) struct PartitionMetrics {
     pub vertex_count: u64,
     pub edge_count: u64,
     pub cut_count: u64,
+    num_partitions: usize,
 }
 
 impl PartitionMetrics {
+    pub fn new(num_partitions: usize) -> Self {
+        assert!(num_partitions > 0, "Number of partitions must be > 0");
+
+        Self {
+            vertex_count: 0,
+            edge_count: 0,
+            cut_count: 0,
+            num_partitions,
+        }
+    }
+
     pub fn edge_cut_ratio(&self) -> f64 {
         if self.edge_count == 0 {
             return 0.0;
@@ -79,10 +91,10 @@ impl PartitionMetrics {
         self.cut_count as f64 / self.edge_count as f64
     }
 
-    pub fn communication_volume(&self, num_partitions: u64) -> f64 {
-        if num_partitions == 0 || self.vertex_count == 0 {
+    pub fn communication_volume(&self) -> f64 {
+        if self.vertex_count == 0 {
             return 0.0;
         }
-        self.cut_count as f64 / (num_partitions * self.vertex_count) as f64
+        self.cut_count as f64 / (self.num_partitions as u64 * self.vertex_count) as f64
     }
 }
