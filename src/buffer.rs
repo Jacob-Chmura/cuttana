@@ -119,9 +119,9 @@ impl<T: Ord> Ord for BufferKey<T> {
 }
 
 pub(crate) trait BufferScorer {
-    fn score<T: Eq + Hash + Clone>(&self, v: &T, nbrs: &[T], state: &CuttanaState<T>) -> f64;
+    fn score<T: Eq + Hash>(&self, v: &T, nbrs: &[T], state: &CuttanaState<T>) -> f64;
 
-    fn update_score<T: Eq + Hash + Clone>(
+    fn update_score<T: Eq + Hash>(
         &self,
         _old_score: f64,
         v: &T,
@@ -147,7 +147,7 @@ impl CuttanaBufferScorer {
 }
 
 impl BufferScorer for CuttanaBufferScorer {
-    fn score<T: Eq + Hash + Clone>(&self, _v: &T, nbrs: &[T], state: &CuttanaState<T>) -> f64 {
+    fn score<T: Eq + Hash>(&self, _v: &T, nbrs: &[T], state: &CuttanaState<T>) -> f64 {
         let degree = nbrs.len() as f64;
         let num_nbrs_partitioned = nbrs
             .iter()
@@ -157,7 +157,7 @@ impl BufferScorer for CuttanaBufferScorer {
         self.theta * (num_nbrs_partitioned / degree) + (degree / self.buffer_deg_threshold)
     }
 
-    fn update_score<T: Eq + Hash + Clone>(
+    fn update_score<T: Eq + Hash>(
         &self,
         old_score: f64,
         _v: &T,
