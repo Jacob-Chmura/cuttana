@@ -89,6 +89,16 @@ where
         }
     }
 
+    #[inline]
+    pub fn num_partitions(&self) -> usize {
+        self.partitions.len()
+    }
+
+    #[inline]
+    pub fn num_sub_partitions(&self) -> usize {
+        self.sub_partitions.len()
+    }
+
     pub fn local_assignment_for(&mut self, partition: u8) -> &mut PartitionAssignment<T, u16> {
         self.local_assignments
             .get_mut(&partition)
@@ -96,15 +106,16 @@ where
     }
 
     pub fn update_metrics(&mut self, _v: &T, nbrs: &[T]) {
+        let num_partitions = self.num_partitions() as u64;
         let metrics = &mut self.global_assignments.metrics;
         metrics.vertex_count += 1;
         metrics.edge_count += nbrs.len() as u64;
 
-        let v_eff = metrics.vertex_count / self.global_assignments.num_partitions as u64;
-        let e_eff = metrics.edge_count / self.global_assignments.num_partitions as u64;
-        for p in 0..self.global_assignments.num_partitions {
-            self.local_assignment_for(p).metrics.vertex_count = v_eff;
-            self.local_assignment_for(p).metrics.edge_count = e_eff;
+        let v_eff = metrics.vertex_count / num_partitions;
+        let e_eff = metrics.edge_count / num_partitions;
+        for p in 0..num_partitions {
+            self.local_assignment_for(p as u8).metrics.vertex_count = v_eff;
+            self.local_assignment_for(p as u8).metrics.edge_count = e_eff;
         }
     }
 
@@ -162,7 +173,7 @@ where
         self.partitions[to_idx].num_sub += 1;
 
         // Build buckets of neighbors grouped by parent
-        let mut buckets = vec![Vec::<u16>::new(); self.global_assignments.num_partitions as usize];
+        let mut buckets = vec![Vec::<u16>::new(); self.num_partitions()];
         for &adj_sub in self.sub_partitions[sub_idx].edges.keys() {
             let parent = self.sub_partitions[adj_sub as usize].parent as usize;
             buckets[parent].push(adj_sub);
@@ -185,8 +196,8 @@ where
     }
 
     fn update_move_score_all_partitions(&mut self, sub: u16, update: UpdateType) {
-        for partition in 0..self.global_assignments.num_partitions {
-            self.update_move_score(sub, partition, update);
+        for partition in 0..self.num_partitions() {
+            self.update_move_score(sub, partition as u8, update);
         }
     }
 

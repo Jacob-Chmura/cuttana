@@ -36,11 +36,11 @@ impl Refiner {
     ) -> Self {
         state.compute_sub_partition_edge_cuts();
 
-        let num_partitions = state.global_assignments.num_partitions as f64;
-        let num_sub_partitions = state.local_assignment_for(0).num_partitions as f64;
         let num_vertices = state.global_assignments.metrics.vertex_count as f64;
-        let max_parent = (num_vertices / num_partitions * (1.0 + balance_slack)) as u64 + 1;
-        let max_sub = (num_sub_partitions / num_partitions * 1.5) as u64 + 1;
+        let max_parent =
+            (num_vertices / state.num_partitions() as f64 * (1.0 + balance_slack)) as u64 + 1;
+        let max_sub =
+            (state.num_sub_partitions() as f64 / state.num_partitions() as f64 * 1.5) as u64 + 1;
 
         Self {
             gain_threshold,
