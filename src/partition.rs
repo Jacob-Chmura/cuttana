@@ -120,7 +120,7 @@ impl PartitionScorer for CuttanaPartitionScorer {
             }
         };
 
-        let mut nbrs_per_partition = vec![0; core.num_partitions.into()];
+        let mut nbrs_per_partition = vec![0; core.num_partitions];
         for nbr in nbrs {
             if let Some(partition) = core.partition_of(nbr)
                 && core.has_room_in_partition(partition)
