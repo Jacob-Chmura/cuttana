@@ -1,8 +1,8 @@
 #[derive(Clone, Debug)]
 pub struct CuttanaConfig {
-    pub num_sub_partitions: u16,
+    pub num_sub_partitions: usize,
     pub balance_slack: f64,
-    pub max_buffer_size: u64,
+    pub max_buffer_size: usize,
     pub buffer_degree_threshold: u32,
     pub gamma: f64,
     pub sub_gamma: f64,
@@ -13,9 +13,9 @@ pub struct CuttanaConfig {
 impl CuttanaConfig {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        num_sub_partitions: u16,
+        num_sub_partitions: usize,
         balance_slack: f64,
-        max_buffer_size: u64,
+        max_buffer_size: usize,
         buffer_degree_threshold: u32,
         gamma: f64,
         sub_gamma: f64,
