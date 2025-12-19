@@ -1,5 +1,5 @@
 use crate::assignment::PartitionAssignment;
-use crate::state::{CuttanaState, GlobalSubPartitionId};
+use crate::state::CuttanaState;
 use rand::Rng;
 use rand::rngs::ThreadRng;
 use std::hash::Hash;
@@ -52,13 +52,7 @@ where
                 state.local_assignment_for(best_partition).partition_of(nbr)
                 && nbr_sub_partition != best_sub_partition
             {
-                // TODO: global-local map
-                let best_sub_partition_global: GlobalSubPartitionId =
-                    best_partition * state.num_sub_partitions_per_partition() + best_sub_partition;
-                let nbr_sub_partition_global: GlobalSubPartitionId =
-                    best_partition * state.num_sub_partitions_per_partition() + nbr_sub_partition;
-                state.sub_partitions[best_sub_partition_global].add_edge(nbr_sub_partition_global);
-                state.sub_partitions[nbr_sub_partition_global].add_edge(best_sub_partition_global);
+                state.add_sub_partition_edge(best_partition, best_sub_partition, nbr_sub_partition);
             }
         }
     }

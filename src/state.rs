@@ -112,6 +112,18 @@ impl<T> CuttanaState<T> {
             .expect("Global partition does not exist")
     }
 
+    pub fn add_sub_partition_edge(
+        &mut self,
+        partition: PartitionId,
+        src: LocalSubPartitionId,
+        dst: LocalSubPartitionId,
+    ) {
+        let src_global = partition * self.num_sub_partitions_per_partition() + src;
+        let dst_global = partition * self.num_sub_partitions_per_partition() + dst;
+        self.sub_partitions[src_global].add_edge(dst_global);
+        self.sub_partitions[dst_global].add_edge(src_global);
+    }
+
     pub fn update_metrics(&mut self, _v: &T, nbrs: &[T]) {
         let num_partitions = self.num_partitions();
         let metrics = &mut self.global_assignments.metrics;
