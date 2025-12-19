@@ -9,7 +9,7 @@ use std::hash::Hash;
 
 pub fn cuttana_partition<T>(
     stream: VertexStream<T>,
-    num_partitions: u8,
+    num_partitions: usize,
     config: CuttanaConfig,
 ) -> PartitionResult<T>
 where

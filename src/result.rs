@@ -3,7 +3,7 @@ use std::collections::HashMap;
 
 /// Final output of the partitioning algorithm.
 pub struct PartitionResult<T> {
-    pub assignments: HashMap<T, u8>,
+    pub assignments: HashMap<T, usize>,
     pub partition_sizes: Vec<usize>,
     pub vertex_count: u64,
     pub edge_count: u64,
