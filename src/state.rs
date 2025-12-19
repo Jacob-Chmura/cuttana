@@ -114,14 +114,33 @@ impl<T> CuttanaState<T> {
 
     pub fn add_sub_partition_edge(
         &mut self,
-        partition: PartitionId,
-        src: LocalSubPartitionId,
-        dst: LocalSubPartitionId,
+        src_partition: PartitionId,
+        src_sub: LocalSubPartitionId,
+        dst_partition: PartitionId,
+        dst_sub: LocalSubPartitionId,
     ) {
-        let src_global = self.local_to_global_sub_partition(partition, src);
-        let dst_global = self.local_to_global_sub_partition(partition, dst);
+        let src_global = self.local_to_global_sub_partition(src_partition, src_sub);
+        let dst_global = self.local_to_global_sub_partition(dst_partition, dst_sub);
         self.sub_partitions[src_global].add_edge(dst_global);
         self.sub_partitions[dst_global].add_edge(src_global);
+    }
+
+    pub fn get_sub_partition_edge(
+        &self,
+        src_partition: PartitionId,
+        src_sub: LocalSubPartitionId,
+        dst_partition: PartitionId,
+        dst_sub: LocalSubPartitionId,
+        directed: bool,
+    ) -> u64 {
+        let src_global = self.local_to_global_sub_partition(src_partition, src_sub);
+        let dst_global = self.local_to_global_sub_partition(dst_partition, dst_sub);
+
+        let mut edge = self.sub_partitions[src_global].get_edge(dst_global);
+        if directed {
+            edge += self.sub_partitions[dst_global].get_edge(src_global);
+        }
+        edge
     }
 
     pub fn update_metrics(&mut self, _v: &T, nbrs: &[T]) {

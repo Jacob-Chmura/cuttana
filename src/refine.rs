@@ -3,14 +3,14 @@ use crate::state::{CuttanaState, GlobalSubPartitionId, LocalSubPartitionId, Part
 /// A single atomic sub-partition move
 #[derive(Debug, Clone)]
 struct Move {
-    sub: usize,
-    from: usize,
-    to: usize,
+    sub: LocalSubPartitionId,
+    from: PartitionId,
+    to: PartitionId,
 }
 
 impl Move {
     #[inline]
-    fn new(sub: usize, from: usize, to: usize) -> Self {
+    fn new(sub: LocalSubPartitionId, from: PartitionId, to: PartitionId) -> Self {
         Self { sub, from, to }
     }
 }
@@ -42,14 +42,17 @@ impl Refiner {
 
         let num_vertices = state.global_assignments.metrics.vertex_count as f64;
         let num_partitions = state.num_partitions() as f64;
+
+        // TODO: Consider paramaterization
         let max_parent = (num_vertices / num_partitions * (1.0 + balance_slack)) as u64 + 1;
         let max_sub = (state.total_num_sub_partitions() as f64 / num_partitions * 1.5) as u64 + 1;
+        let refine_capacity = (max_parent as f64 * 1.1) as u64;
 
         Self {
             gain_threshold,
             max_parent,
             max_sub,
-            refine_capacity: (max_parent as f64 * 1.1) as u64,
+            refine_capacity,
         }
     }
 
@@ -131,20 +134,9 @@ impl Refiner {
                         continue;
                     }
                     let (score_2, sub_2) = (0u64, 0usize); // placeholder
-                    // TODO: global-local map
-                    let sub_global: GlobalSubPartitionId =
-                        from * state.num_sub_partitions_per_partition() + sub;
-                    let sub_2_global: GlobalSubPartitionId =
-                        to * state.num_sub_partitions_per_partition() + sub_2;
-
                     let effective_score = score
                         + score_2
-                        + state.sub_partitions[sub_global].get_edge(sub_2_global)
-                        + if from == evict {
-                            state.sub_partitions[sub_2_global].get_edge(sub_global)
-                        } else {
-                            0
-                        };
+                        + state.get_sub_partition_edge(from, sub, to, sub_2, from == evict);
 
                     if best.as_ref().is_none_or(|b| effective_score < b.score) {
                         best = Some(MovePlan {

@@ -52,7 +52,12 @@ where
                 state.local_assignment_for(best_partition).partition_of(nbr)
                 && nbr_sub_partition != best_sub_partition
             {
-                state.add_sub_partition_edge(best_partition, best_sub_partition, nbr_sub_partition);
+                state.add_sub_partition_edge(
+                    best_partition,     // src partition
+                    best_sub_partition, // src sub partition
+                    best_partition,     // dst partition
+                    nbr_sub_partition,  // dst sub partition
+                );
             }
         }
     }
