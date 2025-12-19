@@ -62,7 +62,7 @@ where
         // https://github.com/cuttana/cuttana-partitioner/blob/ed0c18251273a41792c1fc3e909d4ced44beaa27/partitioners/ogpart_single_thread.cpp#L167
         let balance_slack = (config.balance_slack * 2.0).min(config.balance_slack + 0.5);
         let num_sub_partitions = config.num_sub_partitions;
-        let total_sub_partitions = num_sub_partitions * num_partitions;
+        let total_num_sub_partitions = num_sub_partitions * num_partitions;
 
         Self {
             global_assignments: PartitionAssignment::new(num_partitions, balance_slack),
@@ -77,7 +77,7 @@ where
             partitions: (0..num_partitions)
                 .map(|_| PartitionInfo::new(num_partitions, num_sub_partitions))
                 .collect(),
-            sub_partitions: (0..total_sub_partitions)
+            sub_partitions: (0..total_num_sub_partitions)
                 .map(|id| {
                     let parent = (id / num_sub_partitions) as PartitionId;
                     SubPartitionInfo::new(parent, num_partitions)
@@ -118,8 +118,8 @@ impl<T> CuttanaState<T> {
         src: LocalSubPartitionId,
         dst: LocalSubPartitionId,
     ) {
-        let src_global = partition * self.num_sub_partitions_per_partition() + src;
-        let dst_global = partition * self.num_sub_partitions_per_partition() + dst;
+        let src_global = self.local_to_global_sub_partition(partition, src);
+        let dst_global = self.local_to_global_sub_partition(partition, dst);
         self.sub_partitions[src_global].add_edge(dst_global);
         self.sub_partitions[dst_global].add_edge(src_global);
     }
@@ -157,5 +157,14 @@ impl<T> CuttanaState<T> {
             // add total edge cut to all partitions
             edge_cuts.iter_mut().for_each(|x| *x += total_cut);
         }
+    }
+
+    #[inline]
+    fn local_to_global_sub_partition(
+        &self,
+        partition: PartitionId,
+        sub: LocalSubPartitionId,
+    ) -> GlobalSubPartitionId {
+        partition * self.num_sub_partitions_per_partition() + sub
     }
 }
