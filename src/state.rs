@@ -103,6 +103,15 @@ impl<T> CuttanaState<T> {
         self.total_num_sub_partitions() / self.num_partitions()
     }
 
+    #[inline]
+    pub fn local_to_global_sub_partition(
+        &self,
+        partition: PartitionId,
+        sub: LocalSubPartitionId,
+    ) -> GlobalSubPartitionId {
+        partition * self.num_sub_partitions_per_partition() + sub
+    }
+
     pub fn local_assignment_for(
         &mut self,
         partition: PartitionId,
@@ -158,6 +167,7 @@ impl<T> CuttanaState<T> {
     }
 
     pub fn compute_sub_partition_edge_cuts(&mut self) {
+        // TODO: Consider keeping in Refiner struct
         let parents: Vec<PartitionId> = self.sub_partitions.iter().map(|s| s.parent).collect();
 
         for i in 0..self.sub_partitions.len() {
@@ -176,14 +186,5 @@ impl<T> CuttanaState<T> {
             // add total edge cut to all partitions
             edge_cuts.iter_mut().for_each(|x| *x += total_cut);
         }
-    }
-
-    #[inline]
-    fn local_to_global_sub_partition(
-        &self,
-        partition: PartitionId,
-        sub: LocalSubPartitionId,
-    ) -> GlobalSubPartitionId {
-        partition * self.num_sub_partitions_per_partition() + sub
     }
 }

@@ -187,7 +187,7 @@ fn move_sub_partition<T>(
     from: PartitionId,
     to: PartitionId,
 ) {
-    let sub_global: GlobalSubPartitionId = from * state.num_sub_partitions_per_partition() + sub;
+    let sub_global: GlobalSubPartitionId = state.local_to_global_sub_partition(from, sub);
     update_move_score_all_partitions(state, sub_global, UpdateType::Remove);
 
     let edges: Vec<(GlobalSubPartitionId, u64)> = state.sub_partitions[sub_global]
