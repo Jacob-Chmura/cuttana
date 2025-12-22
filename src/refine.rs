@@ -88,7 +88,7 @@ impl Refiner {
                 {
                     continue;
                 }
-                let (score, sub) = (u64::MAX, 0usize); // placeholder for real scoring
+                let (score, sub) = state.partitions[from].move_score[to].get_min();
 
                 if self.sub_fits_in_partition(state, from, sub, to, self.max_parent)
                     && best.as_ref().is_none_or(|b| score < b.score)
@@ -115,7 +115,7 @@ impl Refiner {
                 if from == to || self.partition_at_sub_capacity(state, to) {
                     continue;
                 }
-                let (score, sub) = (u64::MAX, 0usize); // placeholder
+                let (score, sub) = state.partitions[from].move_score[to].get_min();
 
                 // Case 1: direct move
                 if self.sub_fits_in_partition(state, from, sub, to, self.refine_capacity) {
@@ -254,12 +254,21 @@ fn update_move_score<T>(
 ) {
     let assigned_partition = state.sub_partitions[sub_global].parent;
     let edge_cut = &state.sub_partitions[sub_global].edge_cuts;
-    let _delta = edge_cut[adj_partition] - edge_cut[assigned_partition];
+    let delta = edge_cut[adj_partition] - edge_cut[assigned_partition];
+    let sub_local = state.global_to_local_sub_parition(sub_global);
 
-    // TODO: Segment tree updates
+    let seg_tree = &mut state.partitions[assigned_partition].move_score[adj_partition];
+    let seg_tree_idx = &mut state.sub_partitions[sub_global].move_score_idx[adj_partition];
+
     match update {
-        UpdateType::Add => {}
-        UpdateType::Remove => {}
-        UpdateType::Update => {}
+        UpdateType::Add => {
+            *seg_tree_idx = seg_tree.add(sub_local, delta);
+        }
+        UpdateType::Remove => {
+            seg_tree.remove(sub_local, *seg_tree_idx);
+        }
+        UpdateType::Update => {
+            seg_tree.update(sub_local, delta, *seg_tree_idx);
+        }
     }
 }
