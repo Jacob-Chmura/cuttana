@@ -38,7 +38,11 @@ pub(crate) struct Refiner {
 
 impl Refiner {
     pub fn new<T>(state: &mut CuttanaState<T>, balance_slack: f64, gain_threshold: u64) -> Self {
+        // Initialize segment trees
         state.compute_sub_partition_edge_cuts();
+        for sub_global in 0..state.total_num_sub_partitions() {
+            update_move_score_all_partitions(state, sub_global, UpdateType::Add);
+        }
 
         let num_vertices = state.global_assignments.metrics.vertex_count as f64;
         let num_partitions = state.num_partitions() as f64;
