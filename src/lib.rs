@@ -9,4 +9,5 @@ pub(crate) mod assignment;
 pub(crate) mod buffer;
 pub(crate) mod partition;
 pub(crate) mod refine;
+pub(crate) mod segment_tree;
 pub(crate) mod state;

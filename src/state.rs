@@ -1,5 +1,6 @@
 use crate::assignment::PartitionAssignment;
 use crate::config::CuttanaConfig;
+use crate::segment_tree::SegmentTree;
 use std::collections::HashMap;
 use std::hash::Hash;
 
@@ -9,14 +10,14 @@ pub(crate) type PartitionId = usize;
 
 pub(crate) struct PartitionInfo {
     pub num_sub: usize,
-    pub _move_score: Vec<i32>, // TODO: Segment Trees
+    pub move_score: Vec<SegmentTree<u64>>,
 }
 
 impl PartitionInfo {
-    pub fn new(num_partitions: usize, num_sub: usize) -> Self {
+    pub fn new(num_partitions: usize, num_sub: usize, max_sub: usize) -> Self {
         Self {
             num_sub,
-            _move_score: vec![0; num_partitions],
+            move_score: vec![SegmentTree::new(max_sub); num_partitions],
         }
     }
 }
@@ -25,6 +26,7 @@ pub(crate) struct SubPartitionInfo {
     pub parent: PartitionId,
     pub edges: HashMap<GlobalSubPartitionId, u64>,
     pub edge_cuts: Vec<u64>,
+    pub move_score_idx: Vec<usize>,
 }
 
 impl SubPartitionInfo {
@@ -33,6 +35,7 @@ impl SubPartitionInfo {
             parent,
             edges: HashMap::new(),
             edge_cuts: vec![0; num_partitions],
+            move_score_idx: vec![0; num_partitions],
         }
     }
 
@@ -64,6 +67,9 @@ where
         let num_sub_partitions = config.num_sub_partitions;
         let total_num_sub_partitions = num_sub_partitions * num_partitions;
 
+        // TODO: Duplicated in refiner
+        let max_sub = (total_num_sub_partitions as f64 / num_partitions as f64 * 1.5) as usize + 1;
+
         Self {
             global_assignments: PartitionAssignment::new(num_partitions, balance_slack),
             local_assignments: (0..num_partitions)
@@ -75,7 +81,7 @@ where
                 })
                 .collect(),
             partitions: (0..num_partitions)
-                .map(|_| PartitionInfo::new(num_partitions, num_sub_partitions))
+                .map(|_| PartitionInfo::new(num_partitions, num_sub_partitions, max_sub))
                 .collect(),
             sub_partitions: (0..total_num_sub_partitions)
                 .map(|id| {
@@ -110,6 +116,14 @@ impl<T> CuttanaState<T> {
         sub: LocalSubPartitionId,
     ) -> GlobalSubPartitionId {
         partition * self.num_sub_partitions_per_partition() + sub
+    }
+
+    #[inline]
+    pub fn global_to_local_sub_parition(
+        &self,
+        sub_global: GlobalSubPartitionId,
+    ) -> LocalSubPartitionId {
+        sub_global % self.num_sub_partitions_per_partition()
     }
 
     pub fn local_assignment_for(
